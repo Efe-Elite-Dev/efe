@@ -1,7 +1,7 @@
 void kernel_main(void) {
     volatile char* video_memory = (volatile char*)0xB8000;
     const char* message = "Sky-OS Saf AI Kernel Basariyla Baslatildi!";
-    char color = 0x0F; // Beyaz yazı, siyah arka plan
+    char color = 0x0F; 
 
     // Ekranı temizle
     for (int i = 0; i < 80 * 25 * 2; i += 2) {

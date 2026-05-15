@@ -1,45 +1,67 @@
-name: Sky-OS Build
+name: Sky-OS Auto Build CI
 
 on:
   push:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch:
 
 jobs:
-  build:
+  build-os:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
+    - name: Depoyu Klonla (Checkout)
       uses: actions/checkout@v4
 
-    - name: Setup .NET SDK
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.0.x'
-
-    # ISO'nun boş çıkmasını engelleyen Linux araçları
-    - name: Install ISO Build Tools
+    - name: Gerekli Derleme Araçlarını Kur
       run: |
         sudo apt-get update
-        sudo apt-get install -y xorriso syslinux syslinux-utils mtools
+        sudo apt-get install -y nasm gcc-multilib xorriso grub-pc-bin grub-common mtools
 
-    - name: Restore Dependencies
-      run: dotnet restore
-
-    # HATA ÇÖZÜMÜ: Klasör fark etmeksizin .csproj dosyasını otomatik bulup derler
-    - name: Build and Publish Sky-OS
+    - name: Dosyaları Güvenli Birleştir ve Derle
       run: |
-        PROJECT_FILE=$(find . -name "*.csproj" | head -n 1)
-        echo "Bulunan Proje Dosyası: $PROJECT_FILE"
-        dotnet publish "$PROJECT_FILE" -c Release -r cosmos
+        # 1. BOOT.ASM TEMİZLİĞİ
+        sed '1d' boot.asm | tr -d '\r' > boot_temiz.asm
 
-    # Gerçek .iso dosyasını VirtualBox için paketleyen kısım
-    - name: Upload Sky-OS ISO Artifact
+        # 2. KERNEL.C TEMİZLİĞİ
+        sed '1d;$d' kernel.c | tr -d '\r' > kernel_temiz.c
+
+        # 3. LINKER.LD TEMİZLİĞİ
+        sed '1d;$d' linker.ld | tr -d '\r' > linker_temiz.ld
+
+        echo "[+] Derleme başlatılıyor..."
+        nasm -f elf32 boot_temiz.asm -o boot.o
+        gcc -m32 -c kernel_temiz.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+        ld -m elf_i386 -T linker_temiz.ld boot.o kernel.o -o mykernel.bin
+
+    - name: ISO Klasör Yapısını ve GRUB Ayarlarını Kur
+      run: |
+        mkdir -p iso/boot/grub
+        cp mykernel.bin iso/boot/
+        
+        cat << 'GRUB_EOF' > iso/boot/grub/grub.cfg
+        set timeout=5
+        set default=0
+        menuentry "Sky-OS Saf AI Kernel" {
+            multiboot /boot/mykernel.bin
+            boot
+        }
+        GRUB_EOF
+
+    - name: Boot Edilebilir ISO İmajını Üret
+      run: |
+        # VirtualBox'ın 'No bootable medium' hatası vermemesi için ISO'yu dosya sistemini bozmadan, saf üretiyoruz
+        if command -v grub-mkisofs &> /dev/null; then
+          grub-mkisofs -o data.iso iso
+        else
+          xorriso -as mkisofs -o data.iso iso
+        fi
+
+    - name: Ham ISO Dosyasını Yükle
       uses: actions/upload-artifact@v4
       with:
-        name: Sky-OS-Sanal-Disk
-        path: "**/bin/Release/**/publish/*.iso"
-        if-no-files-found: error
+        name: my-raw-data
+        path: data.iso
+        retention-days: 7
+        compression-level: 0  # Dosyayı ziplemeden ham bırakır

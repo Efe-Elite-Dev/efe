@@ -11,17 +11,19 @@ void kernel_main(void) {
     sky_print("========================================================================\n\n");
     
     sky_print("[+] VGA Metin modu surucusu aktif edildi.\n");
-    sky_print("[+] Donanim kesme tablosu (IDT) yukleniyor...\n");
+    sky_print("[+] Donanim kesme tablosu (IDT) hazirlaniyor...\n");
     
-    // Klavyeyi ve kesme motorunu başlatıyoruz
+    // Klavyeyi ve donanım portlarını ilklendiriyoruz
     init_keyboard();
     
-    sky_print("[+] Klavye surucusu basariyla baglandi!\n");
-    sky_print("[+] Sky-OS su an canli ve tus basimlarini dinliyor.\n\n");
+    sky_print("[+] Klavye surucusu guvenli modda baslatildi!\n");
+    sky_print("[+] Sky-OS canli. IDT tablosu baglanana kadar sistem kilitlendi.\n\n");
     sky_print("Sistem Hazir> ");
 
-    // İşlemciyi uyku modunda tut ama kesmelere açık bırak (sti)
+    // GURU MEDITATION ENGELLEME: 
+    // İşlemciyi kesmelere açmadan (sti demeden) saf kilit döngüsüne alıyoruz.
+    // Böylece harici donanım sinyalleri makineyi çökertemez.
     while (1) {
-        __asm__ __volatile__("sti\n\thlt");
+        __asm__ __volatile__("cli\n\thlt");
     }
 }

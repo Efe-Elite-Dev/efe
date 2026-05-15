@@ -29,6 +29,11 @@ jobs:
         # Resmi profil şablonunu alıyoruz
         cp -r /usr/share/archiso/configs/releng /workspace/profile
 
+        # [GÜNCELLEME]: pacman.conf yolunu garantiye alıyoruz. Eğer kökte yoksa kopyala.
+        if [ ! -f /workspace/profile/pacman.conf ]; then
+            cp /etc/pacman.conf /workspace/profile/pacman.conf
+        fi
+
         # 2. PAKET LISTESI (Python, Performans ve Grafik Bağımlılıkları)
         cat <<PACKAGES >> /workspace/profile/packages.x86_64
         xorg-server
@@ -79,9 +84,10 @@ jobs:
         python-pip
         python-requests
         cpupower
-        EOF
+        PACKAGES
         
         # 3. MULTILIB REPOSUNU AKTIF ETME (32-bit EXE Desteği İçin)
+        # [DÜZELTME]: Konteyner içindeki doğru dosyaya müdahale ediliyor
         sed -i '/\[multilib\]/,/Include = \/etc\/pacman.d\/mirrorlist/s/^#//' /workspace/profile/pacman.conf
 
         # 4. TÜM SİSTEM KLASÖRLERİNİ ÖNCEDEN OLUŞTURMA
@@ -124,11 +130,9 @@ jobs:
 
         with open(token_path, "r") as f: api_key = f.read().strip()
         
-        # Zenity arayüzünü siber renklerle tetikliyoruz
         user_input = subprocess.getoutput("zenity --entry --title='Siber Asistan' --text='Aga emret, neyi uçuralım? (Örn: exe_ayarla, efe-mode)' --width=450")
         
         if user_input.strip():
-            # Özel "efe-mode" komutu tetiklenirse direkt performans moduna al
             if user_input.strip().lower() == "efe-mode":
                 os.system("sudo cpupower frequency-set -g performance")
                 subprocess.Popen(["zenity", "--info", "--text", "⚡ Efe-Mode Aktif! İşlemci frekansları maksimuma sabitlendi, gecikme sıfırlandı!", "--width=300"])
@@ -145,7 +149,6 @@ jobs:
             except:
                 subprocess.Popen(["zenity", "--error", "--text", "Bağlantı hatası veya geçersiz Token!", "--width=300"])
         
-        # RAM Koruyucu: İşimiz bittiğinde arkadaki cache'i temizle
         os.system("sync && echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null")
         GEMINI_CORE
         chmod +x /workspace/profile/airootfs/usr/local/bin/gemini-launch.py

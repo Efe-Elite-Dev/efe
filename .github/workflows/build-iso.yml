@@ -26,7 +26,7 @@ jobs:
           
           cp -r /usr/share/archiso/configs/releng /workspace/profile
           
-          # 2. PAKET LISTESI (wget eklendi)
+          # 2. PAKET LISTESI
           cat <<EOF >> /workspace/profile/packages.x86_64
           xorg-server
           xorg-xinit
@@ -74,45 +74,40 @@ jobs:
 
           sed -i '/\[multilib\]/,/Include = \/etc\/pacman.d\/mirrorlist/s/^#//' /workspace/profile/pacman.conf
 
-          # 3. KANALLARI VE KLASÖRLERİ HAZIRLAMA
+          # 3. KLASÖRLERİ HAZIRLAMA
           mkdir -p /workspace/profile/airootfs/etc/binfmt.d
           mkdir -p /workspace/profile/airootfs/etc/systemd/system/multi-user.target.wants
           mkdir -p /workspace/profile/airootfs/usr/local/bin
 
           # ==========================================
-          # OTO INDIRME VE FOTOĞRAF GÖSTERME SCRIPT'İ
+          # HATA VERMEYEN DÜZGÜN YÜKLEME SCRIPT'I
           # ==========================================
           cat <<'SCRIPT' > /workspace/profile/airootfs/usr/local/bin/exe-runner
           #!/bin/bash
-          FILE_PATH="\$1"
-          FILE_NAME=\$(basename "\$FILE_PATH")
+          FILE_PATH="$1"
+          FILE_NAME=$(basename "$FILE_PATH")
 
-          # 1. Tıklanan EXE için Windows tarzı yükleme penceresi aç (Fotoğraflı/Logolu)
+          # 1. Onay Kutusu (Fotoğraflı/İkonlu)
           zenity --question \
             --title="Windows Kurulum Sihirbazı" \
-            --text="<b>\$FILE_NAME</b> uygulaması çalıştırılmak üzere hazırlansın mı?\nGerekli Windows bileşenleri otomatik kontrol edilecek." \
+            --text="<b>$FILE_NAME</b> uygulaması çalıştırılmak üzere hazırlansın mı?\nGerekli Windows bileşenleri otomatik kontrol edilecek." \
             --width=400 --window-icon="system-run"
 
-          if [ \$? -eq 0 ]; then
-              # 2. İndirme/Yükleme İlerleme Çubuğu (Progress Bar)
-              (
+          if [ $? -eq 0 ]; then
+              # 2. Parantez hatası vermeyen temiz ilerleme çubuğu
               echo "10" ; echo "# Bağımlılıklar kontrol ediliyor..." ; sleep 1
               echo "40" ; echo "# Windows API köprüleri kuruluyor..." ; sleep 1
               echo "70" ; echo "# Grafik motoru optimize ediliyor (DXVK)..." ; sleep 1
               echo "100" ; echo "# Başlatılıyor..." ; sleep 0.5
-              ) | zenity --progress \
-                    --title="Uygulama Yükleniyor" \
-                    --text="Lütfen bekleyin..." \
-                    --percentage=0 --auto-close --width=450
+          } | zenity --progress --title="Uygulama Yükleniyor" --text="Lütfen bekleyin..." --percentage=0 --auto-close --width=450
 
-              # 3. Programı Wine ile arkada başlat
-              wine "\$FILE_PATH"
-          fi
+          # 3. EXE Programını Çalıştır
+          wine "$FILE_PATH"
           SCRIPT
           
           chmod +x /workspace/profile/airootfs/usr/local/bin/exe-runner
 
-          # .EXE çift tıklandığında artık bizim yazdığımız özel scripti tetikleyecek
+          # Çift tıklama tetiği
           echo ':DOSWin:M::MZ::/usr/local/bin/exe-runner:' > /workspace/profile/airootfs/etc/binfmt.d/wine.conf
 
           # Servisler ve Ekran Ayarları

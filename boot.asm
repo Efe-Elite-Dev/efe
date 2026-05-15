@@ -1,9 +1,9 @@
-cat << 'EOF' > boot.asm
-MBALIGN  equ  1 << 0            
-MEMINFO  equ  1 << 1            
-FLAGS    equ  MBALIGN | MEMINFO 
-MAGIC    equ  0x1BADB002        
-CHECKSUM equ -(MAGIC + FLAGS)   
+; Sky-OS Multiboot Bootloader
+MBALIGN  equ  1 << 0
+MEMINFO  equ  1 << 1
+FLAGS    equ  MBALIGN | MEMINFO
+MAGIC    equ  0x1BADB002
+CHECKSUM equ -(MAGIC + FLAGS)
 
 section .multiboot
 align 4
@@ -11,10 +11,10 @@ align 4
     dd FLAGS
     dd CHECKSUM
 
-section .bootstrap_stack, nobits
+section .bss
 align 16
 stack_bottom:
-    resb 16384 
+    resb 16384 ; 16 KiB Stack
 stack_top:
 
 section .text
@@ -23,10 +23,12 @@ extern kernel_main
 
 _start:
     mov esp, stack_top
-    call kernel_main
+    push eax
+    push ebx
 
     cli
+    call kernel_main
+
 .hang:
     hlt
     jmp .hang
-EOF

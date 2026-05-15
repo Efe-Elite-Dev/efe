@@ -16,7 +16,7 @@ jobs:
     - name: Gerekli İmaj Derleme Araçlarını Kur
       run: |
         sudo apt-get update
-        sudo apt-get install -y live-build xorriso squashfs-tools syslinux isolinux
+        sudo apt-get install -y live-build xorriso squashfs-tools syslinux isolinux debootstrap
 
     - name: Canlı Sistem Klasör Yapısını Hazırla
       run: |
@@ -24,11 +24,30 @@ jobs:
         mkdir -p live_boot/binary/live
         mkdir -p live_boot/binary/isolinux
 
-    - name: Bizim packages.txt Listesini Sisteme Çak
+    - name: Gerçek Canlı Sistem Tabanını Oluştur (Debootstrap)
       run: |
-        echo "Bulut sunucusu Sky-OS paketlerini hazırlıyor..."
-        sudo apt-get update
-        sudo xargs -a config/packages.txt apt-get install -y --download-only --no-install-recommends
+        echo "Bulut sunucusu saf Ubuntu tabanını internetten çekiyor..."
+        sudo debootstrap --arch=amd64 noble live_boot/chroot http://archive.ubuntu.com/ubuntu/
+
+    - name: Bizim packages.txt Listesini Chroot İçine Kur
+      run: |
+        echo "Sky-OS paketleri sistem çekirdeğine enjekte ediliyor..."
+        sudo mount --bind /dev live_boot/chroot/dev
+        sudo mount --bind /proc live_boot/chroot/proc
+        sudo mount --bind /sys live_boot/chroot/sys
+        
+        # Paket listesini chroot içine kopyala ve kurulumu tetikle
+        sudo cp config/packages.txt live_boot/chroot/
+        sudo chroot live_boot/chroot apt-get update
+        sudo chroot live_boot/chroot xargs -a /packages.txt apt-get install -y --no-install-recommends
+        sudo rm live_boot/chroot/packages.txt
+        
+        # Donanım sürücüleri ve canlı sistem başlatıcı çekirdeği kur
+        sudo chroot live_boot/chroot apt-get install -y linux-image-generic initramfs-tools live-boot
+        
+        sudo umount live_boot/chroot/dev
+        sudo umount live_boot/chroot/proc
+        sudo umount live_boot/chroot/sys
 
     - name: Bizim Kodları Sistem Klasörlerine Kopyala
       run: |
@@ -50,23 +69,21 @@ jobs:
     - name: ISO Dosyasını Pişir (SquashFS & Xorriso)
       run: |
         echo "Miku çalıyor, işlemciler ISO dosyasını basıyor..."
-        # 1. Sistemi SquashFS ile canavar gibi sıkıştırıyoruz
+        # 1. Sistemi SquashFS ile sıkıştırıyoruz
         sudo mksquashfs live_boot/chroot live_boot/binary/live/filesystem.squashfs -comp xz -e boot
         
-        # 2. Önyükleme (Boot) dosyalarını hazırlıyoruz (Eğer klasör boşsa dummy oluşturur)
-        sudo mkdir -p live_boot/chroot/boot
-        sudo touch live_boot/chroot/boot/vmlinuz-dummy live_boot/chroot/boot/initrd.img-dummy
+        # 2. Gerçek vmlinuz ve initrd dosyalarını çekirdekten binary klasörüne kopyalıyoruz
         sudo cp live_boot/chroot/boot/vmlinuz-* live_boot/binary/live/vmlinuz
         sudo cp live_boot/chroot/boot/initrd.img-* live_boot/binary/live/initrd
         
-        # 3. GERÇEK ISOLINUX DOSYALARINI KOPYALIYORUZ (Hatanın Çözümü)
+        # 3. Gerçek önyükleyici dosyalarını çekiyoruz
         sudo cp /usr/lib/ISOLINUX/isolinux.bin live_boot/binary/isolinux/
         sudo cp /usr/lib/syslinux/modules/bios/ldlinux.c32 live_boot/binary/isolinux/
         
-        # 4. Basit bir Isolinux yapılandırması oluşturuyoruz ki sistem neyi başlatacağını bilsin
+        # 4. Isolinux boot menüsünü yazıyoruz
         echo -e "DEFAULT skyos\nLABEL skyos\n  KERNEL /live/vmlinuz\n  APPEND initrd=/live/initrd boot=live quiet splash" | sudo tee live_boot/binary/isolinux/isolinux.cfg
         
-        # 5. Xorriso ile ISO kalıbını döküyoruz (Büyük harf kurallarına uygun VolID ile)
+        # 5. Xorriso ile ISO kalıbını nihai haline getiriyoruz
         sudo xorrisofs -r -V "SKY_OS" \
           -b isolinux/isolinux.bin -c isolinux/boot.cat \
           -no-emul-boot -boot-load-size 4 -boot-info-table \

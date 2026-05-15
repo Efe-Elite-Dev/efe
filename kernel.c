@@ -1,18 +1,17 @@
-// Sky-OS Kernel Main
+// Sky-OS Kernel Main (Workflow ilk satiri silecek, bu yazi gidecek)
 void kernel_main(unsigned long magic, unsigned long addr) {
     volatile char* video_memory = (volatile char*)0xB8000;
     const char* message = "Sky-OS Saf AI Kernel Basariyla Baslatildi!";
     
-    // Ekrana renkli basma renk kodu (Beyaz yazı, siyah arka plan)
-    char color = 0x0F; 
+    char color = 0x0F; // Beyaz yazi, siyah arka plan
 
-    // Önce ekranı temizleyelim
+    // Ekranı temizle
     for (int i = 0; i < 80 * 25 * 2; i += 2) {
         video_memory[i] = ' ';
         video_memory[i + 1] = color;
     }
 
-    // Mesajı sol üste yazdıralım
+    // Mesajı ekrana yazdır
     int i = 0;
     while (message[i] != '\0') {
         video_memory[i * 2] = message[i];
@@ -21,7 +20,7 @@ void kernel_main(unsigned long magic, unsigned long addr) {
     }
 
     while (1) {
-        // İşlemciyi boşa yormamak için kilitle
         __asm__ __volatile__("hlt");
     }
 }
+// Workflow en son satiri silecek, bu yazi gidecek ve kodun parantezi korunacak!

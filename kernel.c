@@ -1,22 +1,27 @@
-cat << 'EOF' > kernel.c
-#define VGA_WIDTH 80
-#define VGA_HEIGHT 25
-const int VGA_COLOR_WHITE_ON_BLACK = 0x07;
-
-void kernel_main(void) {
+// Sky-OS Kernel Main
+void kernel_main(unsigned long magic, unsigned long addr) {
     volatile char* video_memory = (volatile char*)0xB8000;
+    const char* message = "Sky-OS Saf AI Kernel Basariyla Baslatildi!";
+    
+    // Ekrana renkli basma renk kodu (Beyaz yazı, siyah arka plan)
+    char color = 0x0F; 
 
-    for (int i = 0; i < VGA_WIDTH * VGA_HEIGHT * 2; i += 2) {
+    // Önce ekranı temizleyelim
+    for (int i = 0; i < 80 * 25 * 2; i += 2) {
         video_memory[i] = ' ';
-        video_memory[i + 1] = VGA_COLOR_WHITE_ON_BLACK;
+        video_memory[i + 1] = color;
     }
 
-    const char* str = "Sky-OS Saf AI Kernel Basariyla Baslatildi!";
+    // Mesajı sol üste yazdıralım
     int i = 0;
-    while (str[i] != '\0') {
-        video_memory[i * 2] = str[i];
-        video_memory[i * 2 + 1] = VGA_COLOR_WHITE_ON_BLACK;
+    while (message[i] != '\0') {
+        video_memory[i * 2] = message[i];
+        video_memory[i * 2 + 1] = color;
         i++;
     }
+
+    while (1) {
+        // İşlemciyi boşa yormamak için kilitle
+        __asm__ __volatile__("hlt");
+    }
 }
-EOF

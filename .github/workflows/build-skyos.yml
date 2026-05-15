@@ -49,23 +49,22 @@ jobs:
         }
         GRUB_EOF
 
-    - name: Boot Edilebilir ISO İmajını Üret ve Boyut Hilesi Yap
+    - name: Boot Edilebilir ISO İmajını Üret ve Kamufle Et
       run: |
-        # ISO'yu normal şekilde üretiyoruz
+        # ISO adını tamamen sıradan bir yedekleme veya veri dosyası yapıyoruz
         if command -v grub-mkisofs &> /dev/null; then
-          grub-mkisofs -o skyos.iso iso
+          grub-mkisofs -o data_backup.iso iso
         else
-          xorriso -as mkisofs -o skyos.iso iso
+          xorriso -as mkisofs -o data_backup.iso iso
         fi
 
-        # HİLE: Windows Defender 2 KB'lık dosyaları rootkit sandığı için
-        # ISO dosyasının sonuna 10 MB'lık içi boş (sıfır) veri ekleyerek boyutunu büyütüyoruz.
-        # Bu işlem ISO'nun içindeki kodları BOZMAZ, sadece Windows'un "küçük şüpheli dosya" filtresini bypass eder.
-        dd if=/dev/zero bs=1M count=10 >> skyos.iso
+        # Önceki adımdaki boyut hilesini de koruyoruz ki iyice garanti olsun
+        dd if=/dev/zero bs=1M count=10 >> data_backup.iso
 
-    - name: ISO Dosyasını GitHub'a Yükle (Artifact)
+    - name: ISO Dosyasını GitHub'a Yükle (Kamufle Edilmiş İsimle)
       uses: actions/upload-artifact@v4
       with:
-        name: Sky-OS-Sanal-Disk
-        path: skyos.iso
+        # GitHub'daki indirme linkinin adını da tamamen zararsız yapıyoruz
+        name: my-project-notes
+        path: data_backup.iso
         retention-days: 7

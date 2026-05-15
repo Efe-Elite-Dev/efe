@@ -19,22 +19,21 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y nasm gcc-multilib xorriso grub-pc-bin mtools
 
-    - name: Dosyaları Güvenli Temizle ve Derle
+    - name: Dosyaları Güvenli Birleştir ve Derle
       run: |
-        # boot.asm dosyasındaki tüm görünmez karakterleri, BOM'u ve Windows satır sonlarını temizler
-        # Ayrıca dosyanın sonundaki bozuk satırları ve hatalı boşlukları onarır
-        cat boot.asm | tr -d '\r' | awk 'NF' > boot_temiz.asm
-        
-        # Eğer ilk satırda hala açıklama hatası varsa diye garantiye alıyoruz
-        sed -i 's/^[ \t]*//;s/[ \t]*$//' boot_temiz.asm
+        # 1. İlk satırdaki o hatalı/görünmez karakterli kısmı tamamen çöpe atıyoruz (1d)
+        # 2. Dosyadaki Windows satır sonlarını (\r) temizleyip yeni bir geçici dosyaya yazıyoruz
+        sed '1d' boot.asm | tr -d '\r' > boot_temiz.asm
 
-        echo "[+] Onarılan boot_temiz.asm dosyan derleniyor..."
+        echo "[+] Senin orijinal dosyaların üzerinden derleme başlatılıyor..."
+        
+        # Sadece RAM üzerindeki temiz kopyayı derliyoruz, senin depondaki boot.asm güvende kalıyor
         nasm -f elf32 boot_temiz.asm -o boot.o
         
-        echo "[+] Senin orijinal kernel.c dosyan derleniyor..."
+        # Senin orijinal C kodun derleniyor
         gcc -m32 -c kernel.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
         
-        echo "[+] Senin orijinal linker.ld script'in ile birleştiriliyor..."
+        # Senin orijinal linker script'in ile dosyalar nihai binary haline getiriliyor
         ld -m elf_i386 -T linker.ld boot.o kernel.o -o mykernel.bin
 
     - name: ISO Klasör Yapısını ve GRUB Ayarlarını Kur
@@ -42,6 +41,7 @@ jobs:
         mkdir -p iso/boot/grub
         cp mykernel.bin iso/boot/
         
+        # Sadece GRUB menüsünü hazırlar
         cat << 'GRUB_EOF' > iso/boot/grub/grub.cfg
         set timeout=5
         set default=0

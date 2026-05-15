@@ -16,7 +16,7 @@ jobs:
     - name: Gerekli İmaj Derleme Araçlarını Kur
       run: |
         sudo apt-get update
-        sudo apt-get install -y live-build xorriso squashfs-tools
+        sudo apt-get install -y live-build xorriso squashfs-tools syslinux isolinux
 
     - name: Canlı Sistem Klasör Yapısını Hazırla
       run: |
@@ -58,10 +58,16 @@ jobs:
         sudo touch live_boot/chroot/boot/vmlinuz-dummy live_boot/chroot/boot/initrd.img-dummy
         sudo cp live_boot/chroot/boot/vmlinuz-* live_boot/binary/live/vmlinuz
         sudo cp live_boot/chroot/boot/initrd.img-* live_boot/binary/live/initrd
-        sudo touch live_boot/binary/isolinux/isolinux.bin live_boot/binary/isolinux/boot.cat
         
-        # 3. Xorriso ile her bilgisayarın okuyabileceği ISO kalıbını döküyoruz
-        sudo xorrisofs -r -V "Sky-OS" \
+        # 3. GERÇEK ISOLINUX DOSYALARINI KOPYALIYORUZ (Hatanın Çözümü)
+        sudo cp /usr/lib/ISOLINUX/isolinux.bin live_boot/binary/isolinux/
+        sudo cp /usr/lib/syslinux/modules/bios/ldlinux.c32 live_boot/binary/isolinux/
+        
+        # 4. Basit bir Isolinux yapılandırması oluşturuyoruz ki sistem neyi başlatacağını bilsin
+        echo -e "DEFAULT skyos\nLABEL skyos\n  KERNEL /live/vmlinuz\n  APPEND initrd=/live/initrd boot=live quiet splash" | sudo tee live_boot/binary/isolinux/isolinux.cfg
+        
+        # 5. Xorriso ile ISO kalıbını döküyoruz (Büyük harf kurallarına uygun VolID ile)
+        sudo xorrisofs -r -V "SKY_OS" \
           -b isolinux/isolinux.bin -c isolinux/boot.cat \
           -no-emul-boot -boot-load-size 4 -boot-info-table \
           -output Sky-OS-Premium.iso live_boot/binary

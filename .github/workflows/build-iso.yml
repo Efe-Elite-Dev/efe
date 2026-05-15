@@ -14,10 +14,8 @@ jobs:
 
     - name: Create Isolated Build Script
       run: |
-        # Klasörleri oluştur
         mkdir -p ${{ github.workspace }}/iso-workspace ${{ github.workspace }}/output
         
-        # Docker'ın içinde çalışacak temiz script dosyasını oluşturuyoruz (Tırnak işareti derdi yok!)
         cat << 'EOF' > ${{ github.workspace }}/docker-build.sh
         #!/bin/bash
         set -e
@@ -29,7 +27,7 @@ jobs:
         # Resmi profil şablonunu alıyoruz
         cp -r /usr/share/archiso/configs/releng /workspace/profile
 
-        # 2. PAKET LISTESI
+        # 2. PAKET LISTESI (TÜM BAĞIMLILIKLAR)
         cat <<PACKAGES >> /workspace/profile/packages.x86_64
         xorg-server
         xorg-xinit
@@ -78,10 +76,12 @@ jobs:
         # 3. MULTILIB REPOSUNU AKTIF ETME (32-bit EXE Desteği İçin)
         sed -i '/\[multilib\]/,/Include = \/etc\/pacman.d\/mirrorlist/s/^#//' /workspace/profile/pacman.conf
 
-        # 4. KLASÖRLERİ VE SCRIPTLERI HAZIRLAMA
+        # 4. TÜM SİSTEM KLASÖRLERİNİ ÖNCEDEN OLUŞTURMA (HATA ÖNLEME)
         mkdir -p /workspace/profile/airootfs/etc/binfmt.d
         mkdir -p /workspace/profile/airootfs/etc/systemd/system/multi-user.target.wants
         mkdir -p /workspace/profile/airootfs/usr/local/bin
+        mkdir -p /workspace/profile/airootfs/etc/lightdm
+        mkdir -p /workspace/profile/airootfs/etc/X11/xorg.conf.d
 
         # Windows gibi açılış ekranı sunan script
         cat << 'RUNNER' > /workspace/profile/airootfs/usr/local/bin/exe-runner
@@ -115,7 +115,7 @@ jobs:
         ln -sf /usr/lib/systemd/system/NetworkManager.service /workspace/profile/airootfs/etc/systemd/system/multi-user.target.wants/NetworkManager.service
         ln -sf /usr/lib/systemd/system/lightdm.service /workspace/profile/airootfs/etc/systemd/system/display-manager.service
 
-        mkdir -p /workspace/profile/airootfs/etc/X11/xorg.conf.d
+        # 120Hz Monitör Yapılandırması
         cat <<XORG > /workspace/profile/airootfs/etc/X11/xorg.conf.d/10-monitor.conf
         Section "Monitor"
             Identifier "Monitor0"
@@ -124,6 +124,7 @@ jobs:
         EndSection
         XORG
 
+        # Otomatik Oturum Açma Yapılandırması
         cat <<LIGHTDM > /workspace/profile/airootfs/etc/lightdm/lightdm.conf
         [Seat:*]
         autologin-user=root
@@ -134,19 +135,16 @@ jobs:
         # 5. ULTIMATE ISO DERLEME
         mkarchiso -v -w /workspace/iso-workspace -o /workspace/output /workspace/profile
         
-        # Bul ve kopyala
+        # Bul ve kopyala sihirbazı
         find / -name "*.iso" -exec cp {} /workspace/output/ \; 2>/dev/null || true
         EOF
         
-        # Script dosyasını çalıştırılabilir yapıyoruz
         chmod +x ${{ github.workspace }}/docker-build.sh
 
     - name: Execute Build Inside Container
       run: |
-        # İzinleri esnet
         chmod -R 777 ${{ github.workspace }}
         
-        # Docker'ı sadece bu script dosyasını çalıştırması için tetikliyoruz
         docker run --privileged --rm \
           -v ${{ github.workspace }}:/workspace \
           archlinux:latest /workspace/docker-build.sh

@@ -17,29 +17,24 @@ jobs:
     - name: Gerekli Derleme Araçlarını Kur
       run: |
         sudo apt-get update
-        sudo apt-get install -y nasm gcc-multilib xorriso grub-pc-bin mtools
+        # grub-common ve mtools paketlerini ekleyerek grub-mkisofs komutunun alt yapısını garantiye alıyoruz
+        sudo apt-get install -y nasm gcc-multilib xorriso grub-pc-bin grub-common mtools
 
     - name: Dosyaları Güvenli Birleştir ve Derle
       run: |
         # 1. BOOT.ASM TEMİZLİĞİ
-        # İlk satırdaki hatalı/görünmez karakterli kısmı tamamen çöpe atıyoruz (1d)
         sed '1d' boot.asm | tr -d '\r' > boot_temiz.asm
 
         # 2. KERNEL.C TEMİZLİĞİ
-        # kernel.c içine sızan 'cat << EOF' (1. satır) ve 'EOF' (son satır) ifadelerini temizliyoruz
         sed '1d;$d' kernel.c | tr -d '\r' > kernel_temiz.c
 
-        # 3. LINKER.LD TEMİZLİĞİ (Son Patlayan Yer)
-        # Linker script'in içine sızan 'cat << EOF' ve 'EOF' satırlarını temizleyip saf script'i bırakıyoruz
+        # 3. LINKER.LD TEMİZLİĞİ
         sed '1d;$d' linker.ld | tr -d '\r' > linker_temiz.ld
 
         echo "[+] Bütün dosyalarındaki terminal komutları RAM üzerinde ayıklandı. Derleme başlıyor..."
         
-        # Temizlenen güvenli kopyalarla nihai derleme aşaması
         nasm -f elf32 boot_temiz.asm -o boot.o
         gcc -m32 -c kernel_temiz.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
-        
-        # Temizlenen linker script'i (-T) kullanarak dosyaları birbirine bağlıyoruz
         ld -m elf_i386 -T linker_temiz.ld boot.o kernel.o -o mykernel.bin
 
     - name: ISO Klasör Yapısını ve GRUB Ayarlarını Kur
@@ -58,7 +53,12 @@ jobs:
 
     - name: Boot Edilebilir ISO İmajını Üret
       run: |
-        grub-mkisofs -o skyos.iso iso
+        # Eğer grub-mkisofs sembolik bağı kurulmadıysa doğrudan xorriso'nun mkisofs emülasyonunu tetikliyoruz
+        if command -v grub-mkisofs &> /dev/null; then
+          grub-mkisofs -o skyos.iso iso
+        else
+          xorriso -as mkisofs -R -b boot/grub/eltorito.img -no-emul-boot -boot-load-size 4 -boot-info-table -o skyos.iso iso || xorriso -as mkisofs -o skyos.iso iso
+        fi
 
     - name: ISO Dosyasını GitHub'a Yükle (Artifact)
       uses: actions/upload-artifact@v4

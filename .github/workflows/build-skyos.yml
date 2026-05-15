@@ -1,0 +1,50 @@
+name: Sky-OS Saf Kernel Derleyici
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-kernel-iso:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Depoyu Klonla
+      uses: actions/checkout@v4
+
+    - name: Derleme Araçlarını Kur (GCC & NASM)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc nasm xorriso binutils grub-pc-bin
+
+    - name: Assembly Kodunu Derle (boot.asm -> boot.o)
+      run: |
+        nasm -f elf32 boot.asm -o boot.o
+
+    - name: C Kodunu Derle (kernel.c -> kernel.o)
+      run: |
+        gcc -m32 -c kernel.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+
+    - name: Kodları Saf Kernel Olarak Birleştir (Linker)
+      run: |
+        ld -m elf_i386 -Ttext 0x100000 boot.o kernel.o -o skykernel
+
+    - name: GRUB Önyükleme Klasör Yapısını Hazırla
+      run: |
+        mkdir -p iso_root/boot/grub
+        cp skykernel iso_root/boot/
+        echo -e "menuentry \"Sky-OS Saf AI Kernel\" {\n  multiboot /boot/skykernel\n  boot\n}" | sudo tee iso_root/boot/grub/grub.cfg
+
+    - name: Saf ISO Dosyasını Pişir
+      run: |
+        grub-mkrescue -o Sky-OS-Pure.iso iso_root
+
+    - name: Saf Sky-OS ISO'sunu Yayıkla (Release)
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v2.0.0-PureAlpha
+        name: Sky-OS v2.0.0 Saf Kernel Release
+        files: Sky-OS-Pure.iso
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

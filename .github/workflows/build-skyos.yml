@@ -24,7 +24,7 @@ jobs:
         echo "[+] Saf derleme baslatiliyor..."
         nasm -f elf32 boot.asm -o boot.o
         gcc -m32 -c kernel.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
-        ld -m elf_i386 -T linker_temiz.ld boot.o kernel.o -o mykernel.bin || ld -m elf_i386 -T linker.ld boot.o kernel.o -o mykernel.bin
+        ld -m elf_i386 -T linker.ld boot.o kernel.o -o mykernel.bin
 
     - name: ISO Klasor Yapisini Kur
       run: |
@@ -40,10 +40,10 @@ jobs:
         }
         GRUB_EOF
 
-    - name: Standart x86 Boot Edilebilir ISO Uret (Ubuntu Destekli)
+    - name: Standart x86 Boot Edilebilir ISO Uret
       run: |
-        # grub-mkisofs yerine Ubuntu'da kesin çalısan xorriso aracını baglıyoruz
-        xorriso -as mkisofs -R -b boot/grub/stage2_eltorito -no-emul-boot -boot-load-size 4 -boot-info-table -o skyos.iso iso || xorriso -as mkisofs -o skyos.iso iso
+        # Ubuntu üzerinde kesin çalısan evrensel xorriso komutu
+        xorriso -as mkisofs -o skyos.iso iso
 
     - name: Ham ISO Dosyasini Yukle
       uses: actions/upload-artifact@v4

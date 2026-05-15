@@ -12,130 +12,144 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Run Advanced Archiso Builder
+    - name: Create Isolated Build Script
       run: |
+        # Klasörleri oluştur
         mkdir -p ${{ github.workspace }}/iso-workspace ${{ github.workspace }}/output
-        chmod -R 777 ${{ github.workspace }}
+        
+        # Docker'ın içinde çalışacak temiz script dosyasını oluşturuyoruz (Tırnak işareti derdi yok!)
+        cat << 'EOF' > ${{ github.workspace }}/docker-build.sh
+        #!/bin/bash
+        set -e
 
+        # 1. SISTEM GUNCELLEME VE GEREKLI ARACLAR
+        pacman -Syu --noconfirm
+        pacman -S archiso git --noconfirm
+
+        # Resmi profil şablonunu alıyoruz
+        cp -r /usr/share/archiso/configs/releng /workspace/profile
+
+        # 2. PAKET LISTESI
+        cat <<PACKAGES >> /workspace/profile/packages.x86_64
+        xorg-server
+        xorg-xinit
+        xf86-video-intel
+        xf86-video-amdgpu
+        mesa
+        lib32-mesa
+        vulkan-intel
+        vulkan-radeon
+        nvidia-utils
+        lib32-nvidia-utils
+        xfce4
+        xfce4-goodies
+        lightdm
+        lightdm-gtk-greeter
+        networkmanager
+        network-manager-applet
+        wireless_tools
+        wpa_supplicant
+        dialog
+        pipewire
+        pipewire-alsa
+        pipewire-pulse
+        pipewire-jack
+        wireplumber
+        pavucontrol
+        wine
+        wine-gecko
+        wine-mono
+        winetricks
+        zenity
+        wget
+        vkd3d
+        lib32-vkd3d
+        lib32-vulkan-intel
+        lib32-vulkan-radeon
+        thunar
+        thunar-archive-plugin
+        file-roller
+        terminal
+        nano
+        firefox
+        gparted
+        PACKAGES
+
+        # 3. MULTILIB REPOSUNU AKTIF ETME (32-bit EXE Desteği İçin)
+        sed -i '/\[multilib\]/,/Include = \/etc\/pacman.d\/mirrorlist/s/^#//' /workspace/profile/pacman.conf
+
+        # 4. KLASÖRLERİ VE SCRIPTLERI HAZIRLAMA
+        mkdir -p /workspace/profile/airootfs/etc/binfmt.d
+        mkdir -p /workspace/profile/airootfs/etc/systemd/system/multi-user.target.wants
+        mkdir -p /workspace/profile/airootfs/usr/local/bin
+
+        # Windows gibi açılış ekranı sunan script
+        cat << 'RUNNER' > /workspace/profile/airootfs/usr/local/bin/exe-runner
+        #!/bin/bash
+        FILE_PATH="$1"
+        FILE_NAME=$(basename "$FILE_PATH")
+
+        zenity --question \
+          --title="Windows Kurulum Sihirbazı" \
+          --text="<b>$FILE_NAME</b> uygulaması çalıştırılmak üzere hazırlansın mı?\nGerekli Windows bileşenleri otomatik kontrol edilecek." \
+          --width=400 --window-icon="system-run"
+
+        if [ $? -eq 0 ]; then
+            (
+            echo "10" ; echo "# Bağımlılıklar kontrol ediliyor..." ; sleep 1
+            echo "40" ; echo "# Windows API köprüleri kuruluyor..." ; sleep 1
+            echo "70" ; echo "# Grafik motoru optimize ediliyor (DXVK)..." ; sleep 1
+            echo "100" ; echo "# Başlatılıyor..." ; sleep 0.5
+            ) | zenity --progress --title="Uygulama Yükleniyor" --text="Lütfen bekleyin..." --percentage=0 --auto-close --width=450
+            
+            wine "$FILE_PATH"
+        fi
+        RUNNER
+
+        chmod +x /workspace/profile/airootfs/usr/local/bin/exe-runner
+
+        # Çift tıklama tetiği (binfmt_misc)
+        echo ':DOSWin:M::MZ::/usr/local/bin/exe-runner:' > /workspace/profile/airootfs/etc/binfmt.d/wine.conf
+
+        # Servisler ve Ekran Ayarları
+        ln -sf /usr/lib/systemd/system/NetworkManager.service /workspace/profile/airootfs/etc/systemd/system/multi-user.target.wants/NetworkManager.service
+        ln -sf /usr/lib/systemd/system/lightdm.service /workspace/profile/airootfs/etc/systemd/system/display-manager.service
+
+        mkdir -p /workspace/profile/airootfs/etc/X11/xorg.conf.d
+        cat <<XORG > /workspace/profile/airootfs/etc/X11/xorg.conf.d/10-monitor.conf
+        Section "Monitor"
+            Identifier "Monitor0"
+            Option "TargetRefresh" "120"
+            Option "DPMS" "false"
+        EndSection
+        XORG
+
+        cat <<LIGHTDM > /workspace/profile/airootfs/etc/lightdm/lightdm.conf
+        [Seat:*]
+        autologin-user=root
+        autologin-user-timeout=0
+        user-session=xfce
+        LIGHTDM
+
+        # 5. ULTIMATE ISO DERLEME
+        mkarchiso -v -w /workspace/iso-workspace -o /workspace/output /workspace/profile
+        
+        # Bul ve kopyala
+        find / -name "*.iso" -exec cp {} /workspace/output/ \; 2>/dev/null || true
+        EOF
+        
+        # Script dosyasını çalıştırılabilir yapıyoruz
+        chmod +x ${{ github.workspace }}/docker-build.sh
+
+    - name: Execute Build Inside Container
+      run: |
+        # İzinleri esnet
+        chmod -R 777 ${{ github.workspace }}
+        
+        # Docker'ı sadece bu script dosyasını çalıştırması için tetikliyoruz
         docker run --privileged --rm \
           -v ${{ github.workspace }}:/workspace \
-          archlinux:latest bash -c "
-          # 1. SISTEM GUNCELLEME VE GEREKLI ARACLAR
-          pacman -Syu --noconfirm
-          pacman -S archiso git --noconfirm
-          
-          cp -r /usr/share/archiso/configs/releng /workspace/profile
-          
-          # 2. PAKET LISTESI
-          cat <<EOF >> /workspace/profile/packages.x86_64
-          xorg-server
-          xorg-xinit
-          xf86-video-intel
-          xf86-video-amdgpu
-          mesa
-          lib32-mesa
-          vulkan-intel
-          vulkan-radeon
-          nvidia-utils
-          lib32-nvidia-utils
-          xfce4
-          xfce4-goodies
-          lightdm
-          lightdm-gtk-greeter
-          networkmanager
-          network-manager-applet
-          wireless_tools
-          wpa_supplicant
-          dialog
-          pipewire
-          pipewire-alsa
-          pipewire-pulse
-          pipewire-jack
-          wireplumber
-          pavucontrol
-          wine
-          wine-gecko
-          wine-mono
-          winetricks
-          zenity
-          wget
-          vkd3d
-          lib32-vkd3d
-          lib32-vulkan-intel
-          lib32-vulkan-radeon
-          thunar
-          thunar-archive-plugin
-          file-roller
-          terminal
-          nano
-          firefox
-          gparted
-          EOF
-
-          sed -i '/\[multilib\]/,/Include = \/etc\/pacman.d\/mirrorlist/s/^#//' /workspace/profile/pacman.conf
-
-          # 3. KLASÖRLERİ HAZIRLAMA
-          mkdir -p /workspace/profile/airootfs/etc/binfmt.d
-          mkdir -p /workspace/profile/airootfs/etc/systemd/system/multi-user.target.wants
-          mkdir -p /workspace/profile/airootfs/usr/local/bin
-
-          # ==========================================
-          # HATA VERMEYEN DÜZGÜN YÜKLEME SCRIPT'I
-          # ==========================================
-          cat <<'SCRIPT' > /workspace/profile/airootfs/usr/local/bin/exe-runner
-          #!/bin/bash
-          FILE_PATH="$1"
-          FILE_NAME=$(basename "$FILE_PATH")
-
-          # 1. Onay Kutusu (Fotoğraflı/İkonlu)
-          zenity --question \
-            --title="Windows Kurulum Sihirbazı" \
-            --text="<b>$FILE_NAME</b> uygulaması çalıştırılmak üzere hazırlansın mı?\nGerekli Windows bileşenleri otomatik kontrol edilecek." \
-            --width=400 --window-icon="system-run"
-
-          if [ $? -eq 0 ]; then
-              # 2. Parantez hatası vermeyen temiz ilerleme çubuğu
-              echo "10" ; echo "# Bağımlılıklar kontrol ediliyor..." ; sleep 1
-              echo "40" ; echo "# Windows API köprüleri kuruluyor..." ; sleep 1
-              echo "70" ; echo "# Grafik motoru optimize ediliyor (DXVK)..." ; sleep 1
-              echo "100" ; echo "# Başlatılıyor..." ; sleep 0.5
-          } | zenity --progress --title="Uygulama Yükleniyor" --text="Lütfen bekleyin..." --percentage=0 --auto-close --width=450
-
-          # 3. EXE Programını Çalıştır
-          wine "$FILE_PATH"
-          SCRIPT
-          
-          chmod +x /workspace/profile/airootfs/usr/local/bin/exe-runner
-
-          # Çift tıklama tetiği
-          echo ':DOSWin:M::MZ::/usr/local/bin/exe-runner:' > /workspace/profile/airootfs/etc/binfmt.d/wine.conf
-
-          # Servisler ve Ekran Ayarları
-          ln -sf /usr/lib/systemd/system/NetworkManager.service /workspace/profile/airootfs/etc/systemd/system/multi-user.target.wants/NetworkManager.service
-          ln -sf /usr/lib/systemd/system/lightdm.service /workspace/profile/airootfs/etc/systemd/system/display-manager.service
-
-          mkdir -p /workspace/profile/airootfs/etc/X11/xorg.conf.d
-          cat <<XORG > /workspace/profile/airootfs/etc/X11/xorg.conf.d/10-monitor.conf
-          Section "Monitor"
-              Identifier "Monitor0"
-              Option "TargetRefresh" "120"
-              Option "DPMS" "false"
-          EndSection
-          XORG
-
-          cat <<LIGHTDM > /workspace/profile/airootfs/etc/lightdm/lightdm.conf
-          [Seat:*]
-          autologin-user=root
-          autologin-user-timeout=0
-          user-session=xfce
-          LIGHTDM
-
-          # 4. ULTIMATE ISO DERLEME
-          mkarchiso -v -w /workspace/iso-workspace -o /workspace/output /workspace/profile
-          
-          find / -name "*.iso" -exec cp {} /workspace/output/ \; 2>/dev/null || true
-          chmod -R 777 /workspace/output
-        "
+          archlinux:latest /workspace/docker-build.sh
 
     - name: Upload Finished Ultimate ISO
       uses: actions/upload-artifact@v4

@@ -1,3 +1,4 @@
+/* Workflow ilk satiri silecek, bu aciklama satiri gidecek */
 ENTRY(_start)
 
 SECTIONS
@@ -26,3 +27,4 @@ SECTIONS
         *(.bss)
     }
 }
+/* Workflow en son satiri silecek, bu aciklama satiri gidecek ve parantez korunacak! */

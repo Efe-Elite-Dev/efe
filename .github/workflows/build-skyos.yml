@@ -17,14 +17,20 @@ jobs:
     - name: Gerekli Derleme Araçlarını Kur
       run: |
         sudo apt-get update
-        sudo apt-get install -y nasm gcc-multilib xorriso grub-pc-bin grub-common mtools isolinux
+        sudo apt-get install -y nasm gcc-multilib xorriso grub-pc-bin grub-common mtools
 
-    - name: Kernel ve Bootloader Derle
+    - name: Kernel ve Suruculeri Derle
       run: |
-        echo "[+] Saf derleme baslatiliyor..."
+        echo "[+] Moduler surucu derlemesi baslatiliyor..."
         nasm -f elf32 boot.asm -o boot.o
+        
+        # Tüm .c dosyalarımızı (kernel, screen, keyboard) tek seferde derliyoruz
         gcc -m32 -c kernel.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
-        ld -m elf_i386 -T linker.ld boot.o kernel.o -o mykernel.bin
+        gcc -m32 -c screen.c -o screen.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+        gcc -m32 -c keyboard.c -o keyboard.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+        
+        # Linker ile hepsini tek bir işletim sistemi binary'sine baglıyoruz
+        ld -m elf_i386 -T linker.ld boot.o kernel.o screen.o keyboard.o -o mykernel.bin
 
     - name: ISO Klasor Yapisini Kur
       run: |
@@ -40,9 +46,8 @@ jobs:
         }
         GRUB_EOF
 
-    - name: Standart x86 Boot Edilebilir ISO Uret (VirtualBox Destekli)
+    - name: Standart x86 Boot Edilebilir ISO Uret
       run: |
-        # VirtualBox'ın BIOS modunda boot edebilmesi için GRUB'ın yerleşik kurtarma imajını ISO'nun kalbine gömüyoruz
         grub-mkrescue -o skyos.iso iso
 
     - name: Ham ISO Dosyasini Yukle

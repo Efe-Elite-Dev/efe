@@ -22,23 +22,25 @@ jobs:
     - name: Dosyaları Güvenli Birleştir ve Derle
       run: |
         # 1. BOOT.ASM TEMİZLİĞİ
-        # İlk satırdaki o hatalı/görünmez karakterli kısmı tamamen çöpe atıyoruz (1d)
-        # Dosyadaki Windows satır sonlarını (\r) temizleyip yeni bir geçici dosyaya yazıyoruz
+        # İlk satırdaki hatalı/görünmez karakterli kısmı tamamen çöpe atıyoruz (1d)
         sed '1d' boot.asm | tr -d '\r' > boot_temiz.asm
 
-        # 2. KERNEL.C TEMİZLİĞİ (Hatanın Ana Kaynağı)
+        # 2. KERNEL.C TEMİZLİĞİ
         # kernel.c içine sızan 'cat << EOF' (1. satır) ve 'EOF' (son satır) ifadelerini temizliyoruz
-        # Sadece saf C kodunun kalmasını sağlıyoruz
         sed '1d;$d' kernel.c | tr -d '\r' > kernel_temiz.c
 
-        echo "[+] Senin orijinal dosyaların RAM üzerinde temizlenip derleme başlatılıyor..."
+        # 3. LINKER.LD TEMİZLİĞİ (Son Patlayan Yer)
+        # Linker script'in içine sızan 'cat << EOF' ve 'EOF' satırlarını temizleyip saf script'i bırakıyoruz
+        sed '1d;$d' linker.ld | tr -d '\r' > linker_temiz.ld
+
+        echo "[+] Bütün dosyalarındaki terminal komutları RAM üzerinde ayıklandı. Derleme başlıyor..."
         
-        # Temizlenen kodları derliyoruz, depondaki orijinal dosyalara dokunmuyoruz
+        # Temizlenen güvenli kopyalarla nihai derleme aşaması
         nasm -f elf32 boot_temiz.asm -o boot.o
         gcc -m32 -c kernel_temiz.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
         
-        # Linker Script ile dosyaları nihai binary haline getiriyoruz
-        ld -m elf_i386 -T linker.ld boot.o kernel.o -o mykernel.bin
+        # Temizlenen linker script'i (-T) kullanarak dosyaları birbirine bağlıyoruz
+        ld -m elf_i386 -T linker_temiz.ld boot.o kernel.o -o mykernel.bin
 
     - name: ISO Klasör Yapısını ve GRUB Ayarlarını Kur
       run: |

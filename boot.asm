@@ -1,57 +1,37 @@
-; ====================================================================
-; SKY-OS BOOT SCRIPT & INTERRUPT BRIDGE (GRAPHICS ENABLED)
-; ====================================================================
-MBOOT_PAGE_ALIGN    equ 1 << 0    
-MBOOT_MEM_INFO      equ 1 << 1    
-MBOOT_VIDEO_MODE    equ 1 << 2    ; Grafik modunu aktif eden sihirli bit!
+bits 32
+section .text
+        align 4
+        dd 0x1BADB002              ; Sihirli sayı (Multiboot)
+        dd 0x00000005              ; Flags (VBE Grafik modunu tetikler)
+        dd - (0x1BADB002 + 0x00000005)
 
-MBOOT_HEADER_MAGIC  equ 0x1BADB002 
-MBOOT_HEADER_FLAGS  equ MBOOT_PAGE_ALIGN | MBOOT_MEM_INFO | MBOOT_VIDEO_MODE
-MBOOT_CHECKSUM      equ -(MBOOT_HEADER_MAGIC + MBOOT_HEADER_FLAGS)
+        ; VBE Grafik Modu Zorunlu İstekleri (800x600x32bpp LFB)
+        dd 0, 0, 0, 0, 0
+        dd 0                       ; Mode type (0 = LFB)
+        dd 800                     ; Width
+        dd 600                     ; Height
+        dd 32                      ; BPP
 
-SECTION .multiboot
-align 4
-    dd MBOOT_HEADER_MAGIC
-    dd MBOOT_HEADER_FLAGS
-    dd MBOOT_CHECKSUM
-    
-    ; Multiboot Grafik Alanı (GRUB bu parametrelere göre ekran kartını açar)
-    dd 0, 0, 0, 0, 0
-    dd 0            ; 0 = Lineer Grafik Modu
-    dd 800          ; Genişlik (Width)
-    dd 600          ; Yükseklik (Height)
-    dd 32           ; Renk Derinliği (BPP)
-
-SECTION .text
 global _start
-global load_idt
-global keyboard_handler_asm
 extern kernel_main
 extern keyboard_handler_c
 
 _start:
-    cli
-    mov esp, stack_space
-    
-    ; GRUB, Multiboot bilgi yapısının adresini EBX register'ına koyar.
-    ; Bunu kernel_main'e parametre olarak gönderiyoruz ki gerçek ekran adresini okuyabilelim!
-    push ebx        
-    call kernel_main
-    jmp $
+        cli
+        mov esp, stack_space
+        push ebx                   ; Multiboot info yapısının adresini C'ye gönder
+        call kernel_main
 
-load_idt:
-    mov eax, [esp + 4]
-    lidt [eax]
-    sti 
-    ret
-
+global keyboard_handler_asm
 keyboard_handler_asm:
-    pusha           
-    call keyboard_handler_c 
-    popa            
-    iret            
+        pushad
+        call keyboard_handler_c    ; kernel.c içindeki köprüyü tetikle
+        popad
+        iretd
 
-SECTION .bss
-align 16
+section .bss
+resb 8192
 stack_space:
-    resb 8192
+
+; Modern Linker (.note.GNU-stack) uyarısını kökten çözen kritik satır
+section .note.GNU-stack noalloc noexec nowrite progbits

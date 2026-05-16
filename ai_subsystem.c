@@ -1,49 +1,27 @@
 #include "sky_subsystem.h"
 
-// Dışarıdaki ekran değişkenlerine erişim köprüsü
-extern uint32_t* vbe_vram;
-extern uint32_t  vbe_pitch;
-
-// Yapay zekanın siber hafızası
-static int ai_error_history[10] = {0};
-static int ai_self_repair_count = 0;
-
-// Sinir ağı ağırlıkları
-static const int ai_weights[2] = {3, -2}; 
-static const int ai_bias = 5;
-
 /**
- * MİKRO SİNİR AĞI: kernel.c'nin aradığı o fonksiyon!
+ * 🧠 YAPAY ZEKA TABANLI SİSTEM YÜKÜ TAHMİN MOTORU
+ * Fare hareket delta değerine ve döngü hızına bakarak işlemcinin stres seviyesini tahmin eder.
+ * Dönüş Değeri: 1 -> Yüksek Stres (Sistem Yoğun), 0 -> Normal Durum (Sistem Rahat)
  */
 int ai_predict_hardware_load(int mouse_delta_x, int loop_count) {
-    int score = (mouse_delta_x * ai_weights[0]) + (loop_count * ai_weights[1]) + ai_bias;
-    if (score < 0) {
-        return 1; // Sistem zorlanıyor
-    }
-    return 0; // Sistem rahat
-}
+    // Yapay zeka ağırlık ve eşik değerleri (Weights and Biases)
+    int weight_mouse = 3;
+    int weight_loop = 1;
+    int ai_threshold = 250;
 
-/**
- * SELF-HEALING MOTORU: deb_subsystem.c'nin aradığı o fonksiyon!
- */
-void ai_detect_and_self_repair(uint32_t fault_address, int error_code) {
-    int log_index = ai_self_repair_count % 10;
-    ai_error_history[log_index] = error_code;
-    ai_self_repair_count++;
-
-    if (error_code == 139 || error_code == -1) {
-        uint8_t* repair_target = (uint8_t*)(uintptr_t)fault_address;
-        if (repair_target != 0) {
-            *repair_target = 0xC3; // Canlı x86 RET yama kodu yazıldı!
-        }
-        
-        // Başarılı tamir sinyali olarak sol üst köşeye kırmızı nokta çiz
-        if (vbe_vram != 0) {
-            for (int y = 0; y < 20; y++) {
-                for (int x = 0; x < 20; x++) {
-                    vbe_vram[y * (vbe_pitch / 4) + x] = 0xFF0000;
-                }
-            }
-        }
+    // Negatif değerleri siber koruma için pozitife çeviriyoruz (Mutlak Değer)
+    if (mouse_delta_x < 0) {
+        mouse_delta_x = -mouse_delta_x;
     }
+
+    // Basit ve kararlı bir yapay sinir ağı aktivasyon simülasyonu
+    int score = (mouse_delta_x * weight_mouse) + ((loop_count % 100) * weight_loop);
+
+    if (score > ai_threshold) {
+        return 1; // Yapay zekaya göre donanım şu an yoğun yük altında!
+    }
+    
+    return 0; // Yapay zekaya göre donanım şu an çok rahat.
 }

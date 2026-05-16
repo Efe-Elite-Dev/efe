@@ -5,7 +5,7 @@
 #define MOUSE_DATA_PORT 0x60
 #define MOUSE_STATUS_PORT 0x64
 
-/* exe_subsystem.c içindeki OOBE aşama kontrol değişkeni (Tıklama ile pencere değiştirmek için) */
+/* exe_subsystem.c içindeki OOBE aşama kontrol değişkeni */
 extern int setup_stage; 
 
 /* Sürücü odasının kendi iç durumu (Paket döngüsü ve tamponu) */
@@ -33,9 +33,12 @@ void init_mouse(void) {
 
 /* Klavyeyi ve fareyi tek tek koklayan polled nöbetçi fonksiyonu */
 void handle_mouse_polling(void) {
+    /* CRITICAL SCOPE FIX: click_lock artık tüm fonksiyon tarafından görülebilir */
+    static int click_lock = 0;
+
     /* Portta okunacak veri var mı? (Bit 0) */
     if (inb(MOUSE_STATUS_PORT) & 1) {
-        /* Gelen veri gerçekten fareye mi ait yoksa klavyeye mi? (Bit 5 - Auxiliary Output Buffer Full) */
+        /* Gelen veri gerçekten fareye mi ait yoksa klavyeye mi? (Bit 5) */
         if (inb(MOUSE_STATUS_PORT) & 0x20) {
             unsigned char current_byte = inb(MOUSE_DATA_PORT);
             
@@ -50,9 +53,7 @@ void handle_mouse_polling(void) {
                 int left_click = mouse_packet[0] & 1;
 
                 if (left_click) {
-                    /* OOBE pencerelerinde (exe_subsystem) tıklama simülasyonu yapıyoruz.
-                       Her sol tık yapıldığında kurulum aşamalarını (Bölge -> Wi-Fi -> Masaüstü) ileri atar. */
-                    static int click_lock = 0;
+                    /* OOBE pencerelerinde (exe_subsystem) tıklama simülasyonu */
                     if (click_lock == 0) {
                         setup_stage++;
                         if (setup_stage > 2) {
@@ -61,11 +62,8 @@ void handle_mouse_polling(void) {
                         click_lock = 1; /* Tek tıkla çoklu aşama atlamayı engelle */
                     }
                 } else {
-                    click_lock = 0; /* Elini fareden çekince kilidi aç */
+                    click_lock = 0; /* Elini fareden çekince kilidi aç - ARTIK HATA VERMEZ */
                 }
-                
-                /* İleride mouse_packet[1] (X yönü) ve mouse_packet[2] (Y yönü) verileri 
-                   ekrandaki imleci (mouse cursor) hareket ettirmek için kullanılacaktır. */
             }
         }
     }

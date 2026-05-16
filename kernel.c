@@ -7,7 +7,7 @@
 // Windows 11 Fluent Renk Paleti
 #define COLOR_BG         0x0A0F24  
 #define COLOR_TASKBAR    0x1A2342  
-#define COLOR_CURSOR     0x00A2ED  // Parlak Mavi Fare Rengi
+#define COLOR_CURSOR     0x00A2ED  
 #define COLOR_TEXT_WHITE 0xFFFFFF
 
 // Multiboot Protokol Şeması
@@ -33,7 +33,7 @@ int       mouse_y = 300;
 uint8_t   mouse_cycle = 0;
 int8_t    mouse_byte[3];
 
-// 12x19 Boyutunda Klasik İşletim Sistemi Fare Ok İmleci Matrisi (0: Şeffaf, 1: Mavi Cursor)
+// 12x19 Boyutunda Klasik İşletim Sistemi Fare Ok İmleci Matrisi
 const uint8_t mouse_pointer_sprite[19][12] = {
     {1,0,0,0,0,0,0,0,0,0,0,0},
     {1,1,0,0,0,0,0,0,0,0,0,0},
@@ -110,32 +110,27 @@ void put_char(char c, int x, int y, uint32_t color) {
 
 void sky_put_char(char c) {
     static int text_x = 40;
-    static int text_y = 400; // Yazı alanını yukarı çektik ki rahat görünsün
+    static int text_y = 400; 
     put_char(c, text_x, text_y, COLOR_TEXT_WHITE);
     text_x += 8;
     if (text_x > 740) { text_x = 40; text_y += 16; }
 }
 
-// Masaüstü Motoru - GERÇEK FARE İMLECİ ÇİZİMLİ SÜRÜM
 void gui_refresh_desktop(int mx, int my) {
-    // 1. Masaüstü Arka Planı
     for (int i = 0; i < TOTAL_PIXELS; i++) {
         back_buffer[i] = COLOR_BG;
     }
     
-    // 2. Alt Görev Çubuğu
     for (int y = SCREEN_HEIGHT - 40; y < SCREEN_HEIGHT; y++) {
         for (int x = 0; x < SCREEN_WIDTH; x++) {
             back_buffer[y * SCREEN_WIDTH + x] = COLOR_TASKBAR;
         }
     }
 
-    // 3. SKY Logosunu Sol Üste Sabitliyoruz (İmleçten bağımsız dursun)
     put_char('S', 30, 30, COLOR_TEXT_WHITE);
     put_char('K', 38, 30, COLOR_TEXT_WHITE);
     put_char('Y', 46, 30, COLOR_TEXT_WHITE);
     
-    // 4. GERÇEK MAVİ OK FARE İMLECİNİ ÇİZME ALGORİTMASI
     for (int row = 0; row < 19; row++) {
         for (int col = 0; col < 12; col++) {
             if (mouse_pointer_sprite[row][col] == 1) {
@@ -146,7 +141,6 @@ void gui_refresh_desktop(int mx, int my) {
 
     if (vbe_vram == 0) return;
 
-    // Ekrana kopyalama köprüsü
     uint32_t pixels_per_pitch = vbe_pitch / 4; 
     for (int y = 0; y < SCREEN_HEIGHT; y++) {
         for (int x = 0; x < SCREEN_WIDTH; x++) {
@@ -170,36 +164,30 @@ void pic_disable_all(void) {
     outb(0xA1, 0xFF); 
 }
 
-// PS/2 Fareyi güvenle dinlemek için veri akışını açan fonksiyon
 void init_mouse(void) {
-    outb(0x64, 0xA8); // Fare arayüzünü aç
+    outb(0x64, 0xA8); 
     while(inb(0x64) & 0x02);
-    outb(0x64, 0xD4); // Fareye komut yollayacağımızı bildir
+    outb(0x64, 0xD4); 
     while(inb(0x64) & 0x02);
-    outb(0x60, 0xF4); // Veri akışını başlat (Enable Packet Streaming)
+    outb(0x60, 0xF4); 
     while(inb(0x64) & 0x02);
-    inb(0x60);        // Varsa eski çöp tamponu temizle
+    inb(0x60);        
 }
 
-// GELİŞMİŞ SENKRONİZE FARE SÜRÜCÜSÜ (ÇÖKMEYİ VE KİLİTLENMEYİ ENGELLER)
 void handle_mouse_polling(void) {
     uint8_t status = inb(0x64);
-    // Bit 0 aktif (veri var) VE Bit 5 aktifse (gelen veri fareye aitse) oku!
     if ((status & 0x01) && (status & 0x20)) {
         uint8_t data = inb(0x60);
         mouse_byte[mouse_cycle++] = data;
         
         if (mouse_cycle == 3) { 
             mouse_cycle = 0;
-            
-            // PS/2 Fare koordinat dönüştürme matematiği
             int8_t move_x = mouse_byte[1];
             int8_t move_y = mouse_byte[2];
             
-            mouse_x += move_x / 2; // Taşmayı önlemek için hassasiyeti yumuşattık
+            mouse_x += move_x / 2; 
             mouse_y -= move_y / 2; 
             
-            // Ekran sınırlarında imleci hapset (Dışarı kaçıp çökertmesin)
             if (mouse_x < 0) mouse_x = 0;
             if (mouse_x > SCREEN_WIDTH - 12) mouse_x = SCREEN_WIDTH - 12;
             if (mouse_y < 0) mouse_y = 0;
@@ -210,10 +198,8 @@ void handle_mouse_polling(void) {
     }
 }
 
-// SENKRONİZE KLAVYE POLLING SÜRÜCÜSÜ
 void handle_keyboard_polling(void) {
     uint8_t status = inb(0x64);
-    // Bit 0 aktif (veri var) VE Bit 5 pasifse (gelen veri fareye değil, klavyeye aitse) oku!
     if ((status & 0x01) && !(status & 0x20)) {
         uint8_t scancode = inb(0x60);
         if (scancode < 0x80) {
@@ -226,7 +212,20 @@ void handle_keyboard_polling(void) {
     }
 }
 
-extern void init_idt(void);
+// ====================================================================
+// 🔗 ASSEMBLY İLE KÖPRÜ (AÇIK KAYNAK BAĞLANTI FONKSİYONLARI)
+// ====================================================================
+
+// 1. boot.asm içindeki 'keyboard_handler_asm'nin aradığı fonksiyonu buraya bağlıyoruz
+void keyboard_handler_c(void) {
+    handle_keyboard_polling();
+}
+
+// 2. boot.asm dosyasında eğer IDT kurulumu yoksa, kernel_main'in çökmesini 
+// önlemek için buraya sahte/boş bir init_idt gömüyoruz (Veya assembly'deki gerçek fonksiyona bağlarız)
+__attribute__((weak)) void init_idt(void) {
+    // Assembly tarafında gerçek init_idt yoksa burası çalışır ve bootloop'u engeller.
+}
 
 // ANA ÇEKİRDEK GİRİŞİ
 void kernel_main(struct multiboot_info* mboot) {

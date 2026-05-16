@@ -1,77 +1,67 @@
 #include "wind_subsystem.h"
 
-/* Gerçek VRAM Göstergeleri */
-uint32_t* vbe_vram = 0; 
-uint32_t  vbe_pitch = 0;
+/* kernel.c içindeki zırhlı bellek pointer'ı çağrılıyor */
+extern uint32_t* back_buffer;
+int setup_stage = 0;
+extern int central_ai_prediction_level;
 
-/* HAFIZA ZIRHI: 1.9 MB'lık tamponu 16MB fiziksel adresine çiviliyoruz (Yığın Taşması Engellendi!) */
-uint32_t* back_buffer = (uint32_t*)0x01000000; 
-
-int kernel_ai_total_loops = 0;
-
-static inline void io_wait(void) {
-    asm volatile ("outb %%al, $0x80" : : "a"(0));
+void draw_pixel_pure(int x, int y, uint32_t color) {
+    if (x >= 0 && x < 800 && y >= 0 && y < 600) {
+        back_buffer[y * 800 + x] = color;
+    }
 }
 
-/* Arka tamponda hazırlanan resmi tek seferde gerçek ekrana basan motor */
-void swap_buffers(void) {
-    uint32_t pixels_per_line = vbe_pitch / 4;
-    for (int y = 0; y < 600; y++) {
-        for (int x = 0; x < 800; x++) {
-            vbe_vram[y * pixels_per_line + x] = back_buffer[y * 800 + x];
+void draw_filled_rect(int x, int y, int width, int height, uint32_t color) {
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            draw_pixel_pure(x + j, y + i, color);
         }
     }
 }
 
-void kernel_main(struct multiboot_info* mboot) {
-    if (mboot != 0 && (mboot->flags & (1 << 12)) && (mboot->framebuffer_addr != 0)) {
-        vbe_vram = (uint32_t*)(uintptr_t)mboot->framebuffer_addr;
-        vbe_pitch = mboot->framebuffer_pitch;
-    } else {
-        vbe_vram = (uint32_t*)0xFD000000; 
-        vbe_pitch = 800 * 4;
+void draw_rect_outline(int x, int y, int width, int height, uint32_t color) {
+    for (int i = 0; i < width; i++) {
+        draw_pixel_pure(x + i, y, color);
+        draw_pixel_pure(x + i, y + height - 1, color);
     }
+    for (int i = 0; i < height; i++) {
+        draw_pixel_pure(x, y + i, color);
+        draw_pixel_pure(x + width - 1, y + i, color);
+    }
+}
 
-    clear_text_screen();
-    init_idt();
-    init_keyboard();
-    init_mouse();
-    
-    uint32_t refresh_counter = 0;
-    int current_wait_cycles = 20;
+void draw_custom_window(int x, int y, int width, int height, const char* title, uint32_t body_color) {
+    draw_filled_rect(x, y, width, height, body_color);
+    draw_filled_rect(x, y, width, 24, 0x001A4473); // Başlık çubuğu
+    draw_rect_outline(x, y, width, height, 0x00FFFFFF); // Net dış kontur
 
-    while (1) {
-        kernel_ai_total_loops++;
-        
-        handle_mouse_polling(); 
-        check_keyboard_pure();  
-        
-        int m_stress = ai_mouse_analyze_stress();
-        int k_cadence = ai_keyboard_analyze_cadence();
-        int central_ai_decision = ai_core_predict_scheduler(m_stress, k_cadence, kernel_ai_total_loops);
-        
-        /* Çizimler artık doğrudan arka plana yapılıyor, git-gel imkansız */
-        refresh_counter++;
-        if (refresh_counter >= 5) { 
-            gui_refresh_desktop();  
-            run_exe_subsystem(); 
-            
-            /* Jilet gibi geçiş */
-            swap_buffers();
-            refresh_counter = 0;
-        }
-        
-        /* CENTRAL AI Kararına Göre İşlemci Hız Kontrolü */
-        if (central_ai_decision == 2) {
-            current_wait_cycles = 4;   
-        } else if (central_ai_decision == 1) {
-            current_wait_cycles = 15;  
-        } else {
-            current_wait_cycles = 35;  
-        }
+    /* Buton Tasarımı */
+    int btn_w = 80;
+    int btn_h = 25;
+    int btn_x = x + width - btn_w - 15;
+    int btn_y = y + height - btn_h - 15;
+    draw_filled_rect(btn_x, btn_y, btn_w, btn_h, 0x000A3A6B); 
+    draw_rect_outline(btn_x, btn_y, btn_w, btn_h, 0x00FFFFFF); 
+}
 
-        for (volatile int i = 0; i < current_wait_cycles; i++) {
-            io_wait();
-        }
+void run_exe_subsystem(void) {
+    int win_x = 150;
+    int win_y = 100;
+    int win_w = 500;
+    int win_h = 380;
+
+    if (setup_stage == 0) {
+        draw_custom_window(win_x, win_y, win_w, win_h, "Wind OS - AI Setup Step 1", 0x00CCCCCC);
+        uint32_t ai_status_color = (central_ai_prediction_level == 2) ? 0x00FF0000 : 0x0000FF00;
+        /* Kibar alt durum çizgisi */
+        draw_filled_rect(win_x + 40, win_y + win_h - 60, win_w - 80, 4, ai_status_color);
+        
+    } else if (setup_stage == 1) {
+        draw_custom_window(win_x, win_y, win_w, win_h, "Hardware Calibration Step 2", 0x00BBBBBB);
+        draw_filled_rect(win_x + 50, win_y + 150, 400, 8, 0x0000FF00);
+        
+    } else if (setup_stage == 2) {
+        draw_custom_window(win_x, win_y, win_w, win_h, "Finalizing OS Setup Step 3", 0x00AAAAAA);
+        draw_filled_rect(win_x + 50, win_y + 200, 400, 12, 0x000A3A6B);
     }
 }

@@ -1,7 +1,6 @@
-#include "wind_subsystem.h"
-#include "keyboard.h"
+#ifndef KEYBOARD_H
+#define KEYBOARD_H
 
-void init_keyboard(void) {
-    /* Master PIC üzerinden IRQ1 (Klavye) Kesmesini Açma */
-    outb(0x21, inb(0x21) & ~(1 << 1));
-}
+void init_keyboard(void);
+
+#endif /* KEYBOARD_H */

@@ -23,22 +23,38 @@ align 4
 
 section .text
 global _start
+global load_idt
+global keyboard_handler_asm
+
 extern kernel_main
+extern keyboard_handler  ; keyboard.c veya idt.c içindeki C fonksiyonun
 
 _start:
     cli                         ; Kesmeleri kapat
     mov esp, stack_space        ; Güvenli Stack alanını yükle
 
-    ; === KRİTİK KÖPRÜ HİZALAMASI ===
-    ; GRUB'ın hazırladığı multiboot_info adresini (ebx) Stack'e atıyoruz.
-    ; Böylece kernel.c içindeki ilk parametre (mboot) tam bu adresi yakalayacak.
-    push ebx                    
+    ; === MULTIBOOT KÖPRÜSÜ ===
+    push ebx                    ; GRUB multiboot_info adresini C çekirdeğine pasla
     
     call kernel_main            ; Çekirdeği başlat
 
 .hang:
     hlt
     jmp .hang
+
+; === IDT TABLOSUNU İŞLEMCİYE YÜKLEYEN ASKER ===
+load_idt:
+    mov edx, [esp + 4]          ; C'den gelen IDT pointer adresini al
+    lidt [edx]                  ; IDT'yi CPU'ya yükle
+    sti                         ; Kesmeleri tekrar aktif et
+    ret
+
+; === KLAVYE INTERRUPT KÖPRÜSÜ (IRQ 1) ===
+keyboard_handler_asm:
+    pusha                       ; Tüm genel amaçlı yazmaçları korumaya al
+    call keyboard_handler       ; C dilindeki asıl klavye işleyicisini çağır
+    popa                        ; Yazmaçları geri yükle
+    iretd                       ; Kesme dönüşü yap (Interrupt Return)
 
 section .bss
 align 16

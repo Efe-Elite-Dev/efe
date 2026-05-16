@@ -43,7 +43,9 @@ jobs:
             nasm \
             xorriso \
             grub-common \
-            grub-pc-bin
+            grub-pc-bin \
+            mtools \
+            dosfstools
 
       - name: Saf Komutlarla Derleme ve Bağlama (Link) İşlemi
         run: |
@@ -88,7 +90,6 @@ jobs:
           echo '    boot' >> iso_root/boot/grub/grub.cfg
           echo '}' >> iso_root/boot/grub/grub.cfg
           
-          # === İŞTE SİHİRLİ KOMUT ===
           # xorriso ve grub-mkrescue kullanarak kusursuz bootable ISO basıyoruz
           grub-mkrescue -o skyos.iso iso_root/
           
@@ -130,7 +131,7 @@ jobs:
           name: "SKY OS Core Integration ${{ env.VERSION }}"
           body: |
             ## 🚀 SKY OS Core - Otomatik Derleme Raporu
-            Bu sürüm **XORRISO & GRUB 2 (grub-mkrescue)** teknolojileri ile tam boot edilebilir hale getirilmiştir.
+            Bu sürüm **XORRISO, GRUB 2 ve MTOOLS** teknolojileri ile tam boot edilebilir hale getirilmiştir.
             
             - **Sürüm:** ${{ env.VERSION }}
             - **Mimarisi:** x86 Korumalı Mod (32-Bit HAL)

@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # GitHub'a otomatik Release oluşturup dosya yükleyebilmesi için tam yazma izni
     steps:
     - uses: actions/checkout@v4
 
@@ -21,6 +21,7 @@ jobs:
 
     - name: Build ISO via Script
       run: |
+        # Çalıştırma iznini zırhla ve tetikle
         chmod +x build.sh
         bash build.sh
 
@@ -38,12 +39,12 @@ jobs:
         tag_name: v1.1.${{ github.run_number }}
         name: Wind OS Full AI-Core v1.1.${{ github.run_number }}
         body: |
-          🚀 Wind OS Tamamen Sıfırdan ve Yapay Zeka Odalarıyla İnşa Edildi!
+          🚀 Wind OS Tamamen Sıfırdan ve Bağımsız Yapay Zeka Odalarıyla İnşa Edildi!
           
           **Yenilikler:**
-          - Her sürücü odasına (`kernel`, `mouse`, `keyboard`) bağımsız AI analiz motorları gömüldü.
-          - `linker.ld` zırhı sayesinde GRUB'ın yaşadığı `no multiboot header found` hatası kökten çözüldü.
-          - Workflow bağımlılıkları `gcc-multilib` ile güncellenerek 32-bit derleme hatası giderildi.
+          - Her sürücü odasına (`kernel`, `mouse`, `keyboard`) bağımsız AI tahmin ajanları yerleştirildi.
+          - `linker.ld` için geliştirilen nihai yerleşim zırhı sayesinde VirtualBox'taki `no multiboot header found` hatası kökten çözüldü.
+          - `gcc-multilib` entegrasyonuyla GitHub Actions derleme hatası ortadan kaldırıldı.
         draft: false
         prerelease: false
         files: windos.iso

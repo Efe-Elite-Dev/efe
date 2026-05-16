@@ -2,28 +2,17 @@ ENTRY(_start)
 
 SECTIONS
 {
-    /* Çekirdek x86 standartlarında 1MB adresine yüklenir */
+    /* Çekirdek 1MB adresinden başlar */
     . = 0x100000;
 
-    .text BLOCK(4K) : ALIGN(4K)
+    /* En kritik alan: Multiboot başlığını dosyanın EN BAŞINA çiviliyoruz */
+    .text : AT(ADDR(.text))
     {
-        *(.multiboot)   /* boot.asm içindeki başlık buraya kilitlenir */
-        *(.text)
+        *(.multiboot)    /* boot.asm içindeki Multiboot header kesinlikle İLK sırada */
+        *(.text)         /* Ardından normal kodlar */
     }
 
-    .rodata BLOCK(4K) : ALIGN(4K)
-    {
-        *(.rodata)
-    }
-
-    .data BLOCK(4K) : ALIGN(4K)
-    {
-        *(.data)
-    }
-
-    .bss BLOCK(4K) : ALIGN(4K)
-    {
-        *(COMMON)
-        *(.bss)
-    }
+    .rodata : { *(.rodata) }
+    .data   : { *(.data)   }
+    .bss    : { *(.bss)    }
 }

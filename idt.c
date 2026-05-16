@@ -15,14 +15,11 @@ struct idt_ptr {
     uint32_t base;
 } __attribute__((packed));
 
-// 256 adet kesme giriş vektörü
 struct idt_entry idt[256];
 struct idt_ptr idtp;
 
-// Dışarıdaki assembly kesme köprüleri
-extern void idt_load(uint32_t);
+// Harici klavye assembly köprüsü (Eğer bu da hata verirse bunu da içeri alabiliriz)
 extern void keyboard_handler_asm(void);
-extern void mouse_handler_asm(void);
 
 /**
  * 🔒 IDT GİRİŞ KAPISI AYARLAYICI
@@ -36,16 +33,35 @@ void idt_set_gate(uint8_t num, uint32_t base, uint16_t sel, uint8_t flags) {
 }
 
 /**
+ * 🚀 IDT_LOAD FONKSİYONUNU C İÇİNE GÖMÜYORUZ (Linker Hatası Çözüldü!)
+ */
+void idt_load(uint32_t ptr_address) {
+    asm volatile("lidt (%0)" : : "r"(ptr_address));
+}
+
+/**
  * 🛡️ BOŞ KESME KORUYUCU (DUMMY HANDLER)
- * İşlemci tanımlanmamış bir donanım sinyali alırsa Guru Meditation vermesin, 
- * bu güvenli boş fonksiyona düşüp yoluna devam etsin diye!
  */
 void default_exception_handler(void) {
-    // PIC'e (Interrupt Controller) sinyali aldığımızı bildirip CPU'yu rahatlatıyoruz
     asm volatile (
         "movb $0x20, %al\n"
         "outb %al, $0x20\n"
         "outb %al, $0xA0\n"
+    );
+}
+
+/**
+ * 🐭 MOUSE_HANDLER_ASM FONKSİYONUNU İÇERİ ALIYORUZ (Linker Hatası Çözüldü!)
+ * Fare kesmesi geldiğinde doğrudan C içindeki fare işleme fonksiyonunu tetikler.
+ */
+extern void mouse_handler(void); // mouse.c içindeki orijinal fonksiyon
+__attribute__((naked)) void mouse_handler_asm(void) {
+    asm volatile(
+        "pushal\n"              // Tüm yazmaçları (registers) korumaya al
+        "cld\n"                 // String yön flag'ini temizle
+        "call mouse_handler\n"  // Asıl fare sürücüsünü çağır
+        "popal\n"               // Yazmaçları geri yükle
+        "iretl\n"               // Kesmeden güvenli bir şekilde dön
     );
 }
 
@@ -56,30 +72,29 @@ void init_idt(void) {
     idtp.limit = (sizeof(struct idt_entry) * 256) - 1;
     idtp.base = (uint32_t)&idt;
 
-    // KORUMA: İlk önce 256 kesmenin hepsini güvenli boş handler'a bağlıyoruz.
-    // Böylece tanımlanmamış en ufak sinyalde bile VirtualBox Triple Fault verip çökemez!
+    // 256 kesmenin hepsini güvenli boş handler'a bağlıyoruz.
     for (int i = 0; i < 256; i++) {
         idt_set_gate(i, (uint32_t)default_exception_handler, 0x08, 0x8E);
     }
 
-    // Donanımsal PIC IRQ haritalamasını güvenli bölgeye (0x20 ve 0x28) kaydırıyoruz
+    // PIC IRQ haritalamasını güvenli bölgeye (0x20 ve 0x28) kaydırıyoruz
     asm volatile (
-        "movb $0x11, %al\n" "outb %al, $0x20\n" "outb %al, $0xA0\n" // ICW1
-        "movb $0x20, %al\n" "outb %al, $0x21\n"                    // ICW2: Master PIC -> 0x20
-        "movb $0x28, %al\n" "outb %al, $0xA1\n"                    // ICW2: Slave PIC -> 0x28
-        "movb $0x04, %al\n" "outb %al, $0x21\n"                    // ICW3
+        "movb $0x11, %al\n" "outb %al, $0x20\n" "outb %al, $0xA0\n" 
+        "movb $0x20, %al\n" "outb %al, $0x21\n"                    
+        "movb $0x28, %al\n" "outb %al, $0xA1\n"                    
+        "movb $0x04, %al\n" "outb %al, $0x21\n"                    
         "movb $0x02, %al\n" "outb %al, $0xA1\n"
-        "movb $0x01, %al\n" "outb %al, $0x21\n" "outb %al, $0xA1\n" // ICW4
-        "movb $0x00, %al\n" "outb %al, $0x21\n" "outb %al, $0xA1\n" // Maskeleri sıfırla, tüm kesmeleri aç
+        "movb $0x01, %al\n" "outb %al, $0x21\n" "outb %al, $0xA1\n" 
+        "movb $0x00, %al\n" "outb %al, $0x21\n" "outb %al, $0xA1\n" 
     );
 
-    // Ana sürücülerin kesme kapılarını zırhlıyoruz
+    // Sürücülerin kesme kapılarını bağlıyoruz
     idt_set_gate(33, (uint32_t)keyboard_handler_asm, 0x08, 0x8E); // IRQ1: Klavye
     idt_set_gate(44, (uint32_t)mouse_handler_asm, 0x08, 0x8E);    // IRQ12: Fare
 
-    // Hazırladığımız bu zırhlı tabloyu işlemcinin içine yükle
+    // Hazırladığımız zırhlı tabloyu işlemciye yüklüyoruz
     idt_load((uint32_t)&idtp);
     
-    // İşlemci seviyesinde kesme sinyallerini (Interrupts) güvenli modda aktif et
+    // Kesmeleri aktif et
     asm volatile("sti");
 }

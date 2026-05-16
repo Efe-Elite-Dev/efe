@@ -1,11 +1,13 @@
 #include "wind_subsystem.h"
 
-/* Gerçek VRAM Göstergeleri */
+/* Ekran kartının gerçek bellek göstergeleri */
 uint32_t* vbe_vram = 0; 
 uint32_t  vbe_pitch = 0;
 
-/* HAFIZA ZIRHI: 1.9 MB'lık tamponu 16MB fiziksel adresine çiviliyoruz (Yığın Taşması Engellendi!) */
-uint32_t* back_buffer = (uint32_t*)0x01000000; 
+/* BÜYÜK HAFIZA DÜZELTMESİ: 
+   Diziyi fonksiyonların DIŞINDA, global ve statik olarak tanımlıyoruz.
+   Böylece yığın (stack) alanında yer kaplamaz, işlemciyi çökertmez (Triple fault engellendi). */
+static uint32_t back_buffer[800 * 600]; 
 
 int kernel_ai_total_loops = 0;
 
@@ -13,7 +15,7 @@ static inline void io_wait(void) {
     asm volatile ("outb %%al, $0x80" : : "a"(0));
 }
 
-/* Arka tamponda hazırlanan resmi tek seferde gerçek ekrana basan motor */
+/* Gizli arabellekteki resmi ana ekrana basan motor */
 void swap_buffers(void) {
     uint32_t pixels_per_line = vbe_pitch / 4;
     for (int y = 0; y < 600; y++) {
@@ -23,7 +25,9 @@ void swap_buffers(void) {
     }
 }
 
+/* WIND OS ANA GİRİŞ MERKEZİ */
 void kernel_main(struct multiboot_info* mboot) {
+    /* GRUB grafik verilerini doğrula */
     if (mboot != 0 && (mboot->flags & (1 << 12)) && (mboot->framebuffer_addr != 0)) {
         vbe_vram = (uint32_t*)(uintptr_t)mboot->framebuffer_addr;
         vbe_pitch = mboot->framebuffer_pitch;
@@ -32,7 +36,10 @@ void kernel_main(struct multiboot_info* mboot) {
         vbe_pitch = 800 * 4;
     }
 
+    /* Eski VGA metin kalıntılarını temizle */
     clear_text_screen();
+    
+    /* Donanım odalarını ayağa kaldır */
     init_idt();
     init_keyboard();
     init_mouse();
@@ -43,25 +50,34 @@ void kernel_main(struct multiboot_info* mboot) {
     while (1) {
         kernel_ai_total_loops++;
         
+        /* Donanım portlarını dinle */
         handle_mouse_polling(); 
         check_keyboard_pure();  
         
+        /* AI ajan verilerini topla */
         int m_stress = ai_mouse_analyze_stress();
         int k_cadence = ai_keyboard_analyze_cadence();
         int central_ai_decision = ai_core_predict_scheduler(m_stress, k_cadence, kernel_ai_total_loops);
         
-        /* Çizimler artık doğrudan arka plana yapılıyor, git-gel imkansız */
         refresh_counter++;
-        if (refresh_counter >= 5) { 
+        
+        /* KRİTİK MANTIK DÜZELTMESİ: 
+           Ekrana basma işlemini (swap_buffers) sadece ve sadece çizim bittiği an, 
+           yani if şartının tam İÇİNDE tetikliyoruz! */
+        if (refresh_counter >= 8) { 
+            /* 1. Arka planı gizli tamponda boya */
             gui_refresh_desktop();  
+            
+            /* 2. Pencereleri gizli tamponun üzerine bindir */
             run_exe_subsystem(); 
             
-            /* Jilet gibi geçiş */
+            /* 3. Çizim tamamen bitti! Şimdi gizli tamponu şak diye ekrana fırlat */
             swap_buffers();
+            
             refresh_counter = 0;
         }
         
-        /* CENTRAL AI Kararına Göre İşlemci Hız Kontrolü */
+        /* AI Kararına göre işlemci dinlendirme döngüsü */
         if (central_ai_decision == 2) {
             current_wait_cycles = 4;   
         } else if (central_ai_decision == 1) {

@@ -1,42 +1,49 @@
 #include "sky_subsystem.h"
+#include "gui.h"
 
-// kernel.c içinden gelen gerçek donanım adres köprüleri
+// kernel.c veya sky_subsystem.c içinden gelen gerçek donanım adres köprüleri
 extern uint32_t* vbe_vram;
 extern uint32_t  vbe_pitch;
 
-void gui_refresh_desktop(void) {
-    // KORUMA: Eğer kernel henüz VRAM adresini yakalayamadıysa çizim yapıp sistemi kilitleme
+/**
+ * 🎨 GENEL DİKDÖRTGEN ÇİZME MOTORU
+ * exe_subsystem.c'nin pencereleri çizmek için aradığı ve Linker'ın hata verdiği asıl fonksiyon!
+ */
+void gui_draw_rect(int x, int y, int width, int height, uint32_t color) {
+    // KORUMA KATMANI: Eğer VRAM adresi henüz yüklenmediyse çizim yapıp sistemi çökertme
     if (vbe_vram == 0) {
         return;
     }
 
-    // VirtualBox için milimetrik satır genişliği hesabı (uint32_t cinsinden pitch)
-    // Donanımsal pitch byte cinsindendir, 4 byte'a (32-bit) bölerek piksel adedini buluyoruz
-    uint32_t width_pixels = vbe_pitch / 4; 
+    // Sanal makinenin padding (tampon) piksellerini hesaba katan milimetrik genişlik hizalaması
+    uint32_t width_pixels = vbe_pitch / 4;
 
-    // Çözünürlüğü garantiye alalım (800x600 standart multiboot modu)
-    uint32_t screen_width = 800;
-    uint32_t screen_height = 600;
+    for (int curr_y = y; curr_y < y + height; curr_y++) {
+        // EKRAN SINIR KORUMASI: Sınırların dışına taşarsa es geç (Buffer Overflow Önleyici)
+        if (curr_y < 0 || curr_y >= 600) continue;
 
-    // TÜM EKRANI TEMİZ BİR SKI BLUE / MOR RENGE BOYAMA DÖNGÜSÜ
-    for (uint32_t y = 0; y < screen_height; y++) {
-        for (uint32_t x = 0; x < screen_width; x++) {
-            
-            // === KRİTİK HİZALAMA FORMÜLÜ ===
-            // Çizgilerin üst üste binmesini engelleyen asıl siber formül budur!
-            uint32_t pixel_index = (y * width_pixels) + x;
-            
-            // Şık bir işletim sistemi arka plan rengi (Örn: Derin Gece Mavisi/Mor -> 0x1A1A2E)
-            vbe_vram[pixel_index] = 0x1A1A2E; 
+        for (int curr_x = x; curr_x < x + width; curr_x++) {
+            if (curr_x < 0 || curr_x >= 800) continue;
+
+            // Çizgilerin kaymasını ve mor parazitleri engelleyen dinamik indeksleme formülü
+            uint32_t pixel_index = (curr_y * width_pixels) + curr_x;
+            vbe_vram[pixel_index] = color;
         }
     }
+}
 
-    // === ÖRNEK MASAÜSTÜ LOGOSU VEYA PENCERESİ ===
-    // Ekranın ortasına minik, temiz beyaz bir siber kare çizelim ki çalıştığını anlayalım
-    for (uint32_t y = 250; y < 350; y++) {
-        for (uint32_t x = 350; x < 450; x++) {
-            uint32_t pixel_index = (y * width_pixels) + x;
-            vbe_vram[pixel_index] = 0xFFFFFF; // Saf Beyaz
-        }
+/**
+ * 🚀 MASAÜSTÜ YENİLEME MOTORU
+ * Kernel'ın döngü içinde ekranı tazelemek için çağırdığı ana grafik fonksiyonu.
+ */
+void gui_refresh_desktop(void) {
+    if (vbe_vram == 0) {
+        return;
     }
+
+    // 1. Tüm ekranı şık bir Gece Mavisine boyayarak mor/dikey çizgileri yok ediyoruz
+    gui_draw_rect(0, 0, 800, 600, 0x1A1A2E);
+
+    // 2. Ekranın tam ortasına ilk işletim sistemi amblemimizi konduruyoruz (Saf Beyaz Kare)
+    gui_draw_rect(350, 250, 100, 100, 0xFFFFFF);
 }

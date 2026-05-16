@@ -6,6 +6,10 @@
 #define SCREEN_HEIGHT    600
 #define TOTAL_PIXELS     (SCREEN_WIDTH * SCREEN_HEIGHT)
 
+// Donanım Port Tanımlamaları
+#define KEYBOARD_DATA_PORT   0x60
+#define KEYBOARD_STATUS_PORT 0x64
+
 // === Windows 11 / SKY OS Fluent Renk Paleti ===
 #define COLOR_BG_TOP       0xE2E7F0  
 #define COLOR_BG_BOTTOM    0xCCD4E2  
@@ -15,6 +19,10 @@
 #define COLOR_ACCENT_BLUE  0x005A9E  
 #define COLOR_TEXT_WHITE   0xFFFFFF  
 #define COLOR_CURSOR       0x00A2ED  
+#define COLOR_GREEN_SUCCESS 0x107C41 // Kurulum tamamlandığında parlayacak renk
+
+// Global Durum Değişkeni (Kurulum bitti mi?)
+int setup_completed = 0;
 
 // Multiboot Yapısı
 struct multiboot_info {
@@ -25,21 +33,44 @@ struct multiboot_info {
     uint16_t vbe_interface_off; uint16_t vbe_interface_len;
     uint32_t framebuffer_addr; uint32_t framebuffer_pitch;
     uint32_t framebuffer_width; uint32_t framebuffer_height;
-    uint8_t  framebuffer_bpp; uint8_t  framebuffer_type;
+    uint8_t  framebuffer_type;
 } __attribute__((packed));
 
 uint32_t* vbe_vram = (uint32_t*)0xE0000000; 
 uint32_t  vbe_pitch = SCREEN_WIDTH * 4; 
 uint32_t  back_buffer[TOTAL_PIXELS]; 
 
-// Linker hatası veren ASM köprüsü fonksiyonu
+/* Donanımdan veri okuyan Assembly köprüsü */
+static inline uint8_t inb(uint16_t port) {
+    uint8_t data;
+    __asm__ __volatile__("inb %1, %0" : "=a"(data) : "Nd"(port));
+    return data;
+}
+
+/* Linker hatasını önleyen eski ASM köprü fonksiyonu */
 void keyboard_handler_c(void) {
-    volatile uint8_t status;
-    __asm__ __volatile__("inb $0x64, %0" : "=a"(status));
+    volatile uint8_t status = inb(KEYBOARD_STATUS_PORT);
     if (status & 0x01) {
-        volatile uint8_t scancode;
-        __asm__ __volatile__("inb $0x60, %0" : "=a"(scancode));
+        volatile uint8_t scancode = inb(KEYBOARD_DATA_PORT);
         (void)scancode;
+    }
+}
+
+/* Tarama Kodunu ASCII karakterine çeviren harita */
+char scancode_to_ascii(unsigned char scancode) {
+    switch(scancode) {
+        case 0x1E: return 'A'; case 0x30: return 'B'; case 0x2E: return 'C';
+        case 0x20: return 'D'; case 0x12: return 'E'; case 0x21: return 'F';
+        case 0x22: return 'G'; case 0x23: return 'H'; case 0x17: return 'I';
+        case 0x24: return 'J'; case 0x25: return 'K'; case 0x26: return 'L';
+        case 0x32: return 'M'; case 0x31: return 'N'; case 0x18: return 'O';
+        case 0x19: return 'P'; case 0x10: return 'Q'; case 0x13: return 'R';
+        case 0x1F: return 'S'; case 0x14: return 'T'; case 0x16: return 'U';
+        case 0x2F: return 'V'; case 0x11: return 'W'; case 0x2D: return 'X';
+        case 0x15: return 'Y'; case 0x2C: return 'Z';
+        case 0x39: return ' ';  
+        case 0x1C: return '\n'; // Enter tuşu
+        default: return 0;      
     }
 }
 
@@ -123,6 +154,28 @@ void put_string(const char* s, int x, int y, uint32_t color) {
     while (*s) { put_char(*s, x, y, color); x += 8; s++; }
 }
 
+/* Sana Verilen Nöbetçi Klavye Tarama Fonksiyonu (Geliştirildi) */
+void check_keyboard(void) {
+    static unsigned char last_scancode = 0;
+
+    // 1. Durum portunu kontrol et: Veri var mı?
+    if (inb(KEYBOARD_STATUS_PORT) & 1) {
+        // 2. Ham tarama kodunu oku
+        unsigned char scancode = inb(KEYBOARD_DATA_PORT);
+        
+        // 3. Sadece tuşa basıldığında işlem yap (0x80'den küçükse basılmıştır)
+        if (scancode != last_scancode && scancode < 0x80) {
+            char ascii = scancode_to_ascii(scancode);
+            
+            // Eğer Enter tuşuna basıldıysa kuruluma onay ver!
+            if (ascii == '\n') {
+                setup_completed = 1;
+            }
+        }
+        last_scancode = scancode;
+    }
+}
+
 // Ekran Yenileme Motoru
 void render_interface(void) {
     draw_background_gradient();
@@ -133,41 +186,56 @@ void render_interface(void) {
 
     // Sol Küresel Grafik
     int left_center_x = card_x + 160; int left_center_y = card_y + 240;
-    draw_circle(left_center_x, left_center_y, 75, 0x3B82F6);           
-    draw_circle(left_center_x - 12, left_center_y + 12, 55, 0x1D4ED8); 
-    draw_circle(left_center_x + 20, left_center_y - 20, 35, 0x6366F1); 
+    
+    // Eğer kurulum bittiyse sol küreyi yeşile döndür!
+    if (setup_completed) {
+        draw_circle(left_center_x, left_center_y, 75, COLOR_GREEN_SUCCESS);           
+        draw_circle(left_center_x - 12, left_center_y + 12, 55, 0x0E6233); 
+        draw_circle(left_center_x + 20, left_center_y - 20, 35, 0x1ED760); 
+    } else {
+        draw_circle(left_center_x, left_center_y, 75, 0x3B82F6);           
+        draw_circle(left_center_x - 12, left_center_y + 12, 55, 0x1D4ED8); 
+        draw_circle(left_center_x + 20, left_center_y - 20, 35, 0x6366F1); 
+    }
 
     put_string("SKY OS OOBE Setup", card_x + 30, card_y + 30, COLOR_TEXT_SUB);
 
-    // Sağ Alan Metinleri
+    // Sağ Alan Metinleri ve Durum Kontrolü
     int right_content_x = card_x + 340; int right_content_y = card_y + 60;
-    put_string("Bu dogru ulke/bolge mi?", right_content_x, right_content_y, COLOR_TEXT_MAIN);
-    put_string("SKY OS dil ve bolge ayarlari otomatik", right_content_x, right_content_y + 22, COLOR_TEXT_SUB);
-    put_string("olarak sisteme entegre edilecektir.", right_content_x, right_content_y + 38, COLOR_TEXT_SUB);
-
-    // Liste Elemanları
-    int item_x = right_content_x; int item_y = right_content_y + 85;
-    int item_w = 320; int item_h = 36;
-
-    put_string("Almanya", item_x + 12, item_y + 10, COLOR_TEXT_SUB);
-    item_y += item_h + 6;
-    put_string("Amerika Birlesik Devletleri", item_x + 12, item_y + 10, COLOR_TEXT_SUB);
     
-    // Aktif Şerit (Türkiye)
-    item_y += item_h + 6;
-    draw_rect(item_x, item_y, item_w, item_h, COLOR_ACCENT_BLUE);
-    put_string("Turkiye (SKY OS Core)", item_x + 12, item_y + 12, COLOR_TEXT_WHITE);
+    if (setup_completed) {
+        put_string("Kurulum Basariyla Tamamlandi!", right_content_x, right_content_y, COLOR_GREEN_SUCCESS);
+        put_string("SKY OS Core artik kullanima hazir.", right_content_x, right_content_y + 22, COLOR_TEXT_MAIN);
+        put_string("Sistem arka plan cekirdegi baslatiliyor...", right_content_x, right_content_y + 38, COLOR_TEXT_SUB);
+    } else {
+        put_string("Bu dogru ulke/bolge mi?", right_content_x, right_content_y, COLOR_TEXT_MAIN);
+        put_string("SKY OS dil ve bolge ayarlari otomatik", right_content_x, right_content_y + 22, COLOR_TEXT_SUB);
+        put_string("olarak sisteme entegre edilecektir.", right_content_x, right_content_y + 38, COLOR_TEXT_SUB);
 
-    item_y += item_h + 6;
-    put_string("Turkmenistan", item_x + 12, item_y + 10, COLOR_TEXT_SUB);
-    item_y += item_h + 6;
-    put_string("Turkce Q / F Klavye Modu", item_x + 12, item_y + 10, COLOR_TEXT_SUB);
+        // Liste Elemanları
+        int item_x = right_content_x; int item_y = right_content_y + 85;
+        int item_w = 320; int item_h = 36;
 
-    // Sağ Alt Buton
-    int btn_w = 110; int btn_h = 32;
-    int btn_x = card_x + card_w - btn_w - 30; int btn_y = card_y + card_h - btn_h - 30;
-    draw_rect(btn_x, btn_y, btn_w, btn_h, COLOR_ACCENT_BLUE);
-    put_string("Evet", btn_x + 38, btn_y + 8, COLOR_TEXT_WHITE);
+        put_string("Almanya", item_x + 12, item_y + 10, COLOR_TEXT_SUB);
+        item_y += item_h + 6;
+        put_string("Amerika Birlesik Devletleri", item_x + 12, item_y + 10, COLOR_TEXT_SUB);
+        
+        // Aktif Şerit (Türkiye)
+        item_y += item_h + 6;
+        draw_rect(item_x, item_y, item_w, item_h, COLOR_ACCENT_BLUE);
+        put_string("Turkiye (SKY OS Core)", item_x + 12, item_y + 12, COLOR_TEXT_WHITE);
+
+        item_y += item_h + 6;
+        put_string("Turkmenistan", item_x + 12, item_y + 10, COLOR_TEXT_SUB);
+        item_y += item_h + 6;
+        put_string("Turkce Q / F Klavye Modu", item_x + 12, item_y + 10, COLOR_TEXT_SUB);
+
+        // Sağ Alt Buton ("Evet" Butonu)
+        int btn_w = 110; int btn_h = 32;
+        int btn_x = card_x + card_w - btn_w - 30; int btn_y = card_y + card_h - btn_h - 30;
+        draw_rect(btn_x, btn_y, btn_w, btn_h, COLOR_ACCENT_BLUE);
+        put_string("Evet", btn_x + 38, btn_y + 8, COLOR_TEXT_WHITE);
+    }
 
     // 🖱️ FARE OKUNU EN ÜSTE ÇİZ
     for (int row = 0; row < 19; row++) {
@@ -194,11 +262,10 @@ void render_interface(void) {
 // Ana Çekirdek Girişi
 void kernel_main(struct multiboot_info* mboot) {
     if (mboot != 0) {
-        if ((mboot->flags & (1 << 11)) || (mboot->flags & (1 << 2))) {
-            if (mboot->framebuffer_addr != 0) {
-                vbe_vram = (uint32_t*)mboot->framebuffer_addr;
-                vbe_pitch = mboot->framebuffer_pitch;
-            }
+        // Cerrahi müdahale: flag kontrolleri tam senkronize
+        if (mboot->framebuffer_addr != 0) {
+            vbe_vram = (uint32_t*)mboot->framebuffer_addr;
+            vbe_pitch = mboot->framebuffer_pitch;
         }
     }
 
@@ -207,10 +274,12 @@ void kernel_main(struct multiboot_info* mboot) {
 
     uint32_t t = 0;
     while (1) {
-        handle_mouse_polling();
+        handle_mouse_polling(); // Fareyi dinle
+        check_keyboard();       // SANA VERİLEN KLAVYEYİ DE ARTIK DİNLİYORUZ!
+        
         t++;
         if (t % 2000 == 0) { 
-            render_interface();
+            render_interface(); // Ekranı tazele
         }
         for (volatile int i = 0; i < 1000; i++); 
     }

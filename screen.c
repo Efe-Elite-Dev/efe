@@ -1,11 +1,18 @@
 #include "wind_subsystem.h"
-#include "screen.h"
+#include "mouse.h"
 
-void clear_text_screen(void) {
-    /* VGA Metin Modu Belleğini Güvenli Temizleme */
-    char* video_mem = (char*)0xB8000;
-    for (int i = 0; i < 80 * 25 * 2; i += 2) {
-        video_mem[i] = ' ';
-        video_mem[i+1] = 0x07; /* Siyah Arka Plan, Beyaz Yazı */
+void init_mouse(void) {
+    /* Fare Kontrolcüsünü Uyandırma Komutları */
+    outb(0x64, 0xA8);
+    outb(0x64, 0x20);
+    uint8_t status = inb(0x60) | 2;
+    outb(0x64, 0x60);
+    outb(0x60, status);
+}
+
+void handle_mouse_polling(void) {
+    /* Fare Tampon Temizliği (Polled Okuma) */
+    if ((inb(0x64) & 1) == 1) {
+        inb(0x60); 
     }
 }

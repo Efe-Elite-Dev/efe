@@ -36,7 +36,7 @@ struct multiboot_info {
 } __attribute__((packed));
 
 uint32_t* vbe_vram = (uint32_t*)0xE0000000; 
-uint32_t  vbe_pitch = SCREEN_WIDTH * 4; // Varsayılan pitch değeri
+uint32_t  vbe_pitch = SCREEN_WIDTH * 4; 
 uint32_t  back_buffer[TOTAL_PIXELS]; 
 
 /* Donanımdan veri okuyan Assembly köprüsü */
@@ -73,7 +73,7 @@ char scancode_to_ascii(unsigned char scancode) {
     }
 }
 
-// Grafik Çizim Araçları (Back Buffer Tabanlı)
+// 🛠️ TÜM ÇİZİM FONKSİYONLARI ARTIK SADECE SABİT 800 GENİŞLİKLİ BACK_BUFFER'A YAZIYOR
 void draw_background_gradient(void) {
     for (int y = 0; y < SCREEN_HEIGHT; y++) {
         uint8_t r1 = (COLOR_BG_TOP >> 16) & 0xFF; uint8_t g1 = (COLOR_BG_TOP >> 8) & 0xFF; uint8_t b1 = COLOR_BG_TOP & 0xFF;
@@ -82,14 +82,18 @@ void draw_background_gradient(void) {
         uint8_t g = g1 + ((g2 - g1) * y / SCREEN_HEIGHT);
         uint8_t b = b1 + ((b2 - b1) * y / SCREEN_HEIGHT);
         uint32_t color = (r << 16) | (g << 8) | b;
-        for (int x = 0; x < SCREEN_WIDTH; x++) back_buffer[y * SCREEN_WIDTH + x] = color;
+        for (int x = 0; x < SCREEN_WIDTH; x++) {
+            back_buffer[y * SCREEN_WIDTH + x] = color;
+        }
     }
 }
 
 void draw_rect(int start_x, int start_y, int width, int height, uint32_t color) {
     for (int y = start_y; y < start_y + height; y++) {
         for (int x = start_x; x < start_x + width; x++) {
-            if (x >= 0 && x < SCREEN_WIDTH && y >= 0 && y < SCREEN_HEIGHT) back_buffer[y * SCREEN_WIDTH + x] = color;
+            if (x >= 0 && x < SCREEN_WIDTH && y >= 0 && y < SCREEN_HEIGHT) {
+                back_buffer[y * SCREEN_WIDTH + x] = color;
+            }
         }
     }
 }
@@ -98,12 +102,15 @@ void draw_circle(int xc, int yc, int r, uint32_t color) {
     for (int y = yc - r; y <= yc + r; y++) {
         for (int x = xc - r; x <= xc + r; x++) {
             if ((x - xc)*(x - xc) + (y - yc)*(y - yc) <= r*r) {
-                if (x >= 0 && x < SCREEN_WIDTH && y >= 0 && y < SCREEN_HEIGHT) back_buffer[y * SCREEN_WIDTH + x] = color;
+                if (x >= 0 && x < SCREEN_WIDTH && y >= 0 && y < SCREEN_HEIGHT) {
+                    back_buffer[y * SCREEN_WIDTH + x] = color;
+                }
             }
         }
     }
 }
 
+// Donanımsal Font Haritası
 unsigned char font_bitmap[128][16] = {
     ['S'] = {0x3C, 0x42, 0x40, 0x3C, 0x02, 0x02, 0x42, 0x42, 0x3C},
     ['K'] = {0x42, 0x44, 0x48, 0x70, 0x50, 0x48, 0x44, 0x42, 0x42},
@@ -167,8 +174,10 @@ void check_keyboard(void) {
 }
 
 void render_interface(void) {
+    // 1. Arka plan gradyanını buffer'a çiz
     draw_background_gradient();
 
+    // 2. Merkezi beyaz kartı buffer'a çiz
     int card_w = 700; int card_h = 480;
     int card_x = (SCREEN_WIDTH - card_w) / 2; int card_y = (SCREEN_HEIGHT - card_h) / 2;
     draw_rect(card_x, card_y, card_w, card_h, COLOR_CARD_BG);
@@ -205,6 +214,7 @@ void render_interface(void) {
         item_y += item_h + 6;
         put_string("Amerika Birlesik Devletleri", item_x + 12, item_y + 10, COLOR_TEXT_SUB);
         
+        // Mavi Türkiye şeridi
         draw_rect(item_x, item_y, item_w, item_h, COLOR_ACCENT_BLUE);
         put_string("Turkiye (SKY OS Core)", item_x + 12, item_y + 12, COLOR_TEXT_WHITE);
 
@@ -219,7 +229,7 @@ void render_interface(void) {
         put_string("Evet", btn_x + 38, btn_y + 8, COLOR_TEXT_WHITE);
     }
 
-    // 🖱️ FARE OKUNU EN ÜSTE ÇİZ
+    // 3. Farenin okunu buffer'ın EN ÜSTÜNE yerleştir
     for (int row = 0; row < 19; row++) {
         for (int col = 0; col < 12; col++) {
             if (mouse_pointer_sprite[row][col] == 1) {
@@ -232,8 +242,8 @@ void render_interface(void) {
         }
     }
 
-    // 🛠️ KRİTİK KOORDİNAT DÜZELTMESİ:
-    // Back buffer'daki pikselleri gerçek VRAM'e aktarırken donanımın 'vbe_pitch' hizalamasını kullanıyoruz!
+    // 4. 🛠️ TEK BİR GÜVENLİ TRANSFER: Jilet gibi bitmiş tüm buffer'ı, 
+    // ekran kartının donanımsal satır genişliğine (pitch) göre tek seferde VRAM'e basıyoruz!
     uint32_t pixels_per_pitch = vbe_pitch / 4; 
     for (int y = 0; y < SCREEN_HEIGHT; y++) {
         for (int x = 0; x < SCREEN_WIDTH; x++) {
@@ -244,12 +254,9 @@ void render_interface(void) {
 
 // Ana Çekirdek Girişi
 void kernel_main(struct multiboot_info* mboot) {
-    // Multiboot yapısından donanımsal LFB (Linear Framebuffer) bilgilerini çek
-    if (mboot != 0) {
-        if (mboot->framebuffer_addr != 0) {
-            vbe_vram = (uint32_t*)(uintptr_t)mboot->framebuffer_addr;
-            vbe_pitch = mboot->framebuffer_pitch; // Ekran kartının gerçek satır genişliği!
-        }
+    if (mboot != 0 && mboot->framebuffer_addr != 0) {
+        vbe_vram = (uint32_t*)(uintptr_t)mboot->framebuffer_addr;
+        vbe_pitch = mboot->framebuffer_pitch;
     }
 
     init_mouse();          

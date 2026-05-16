@@ -10,20 +10,24 @@ align 4
     dd MBOOT_HEADER_MAGIC
     dd MBOOT_HEADER_FLAGS
     dd MBOOT_CHECKSUM
+    
+    ; Grafik modu için gereken boşluk alanları (Arayüz adresleri sıfırlanmalı)
     dd 0
     dd 0
     dd 0
     dd 0
     dd 0
-    dd 0        
-    dd 800      ; Çözünürlük Genişlik
-    dd 600      ; Çözünürlük Yükseklik
-    dd 32       ; BPP Renk Derinliği
+    
+    ; Ekran Kartı Çözünürlük Yapılandırması
+    dd 0        ; Lineer grafik modu
+    dd 800      ; Genişlik
+    dd 600      ; Yükseklik
+    dd 32       ; BPP (Renk Derinliği)
 
 section .bootstrap_stack, nobits
 align 16
 stack_bottom:
-    resb 16384  ; 16 KB Temiz Stack Alanı
+    resb 16384  ; 16 KB Temiz Çekirdek Stack Alanı
 stack_top:
 
 section .text

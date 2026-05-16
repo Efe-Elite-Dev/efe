@@ -1,10 +1,12 @@
 #include <stdint.h>
 #include "mouse.h" 
 
+// Ekran Çözünürlüğü ve Grafik Makroları
 #define SCREEN_WIDTH     800
 #define SCREEN_HEIGHT    600
 #define TOTAL_PIXELS     (SCREEN_WIDTH * SCREEN_HEIGHT)
 
+// Donanım Port Tanımlamaları
 #define KEYBOARD_DATA_PORT   0x60
 #define KEYBOARD_STATUS_PORT 0x64
 
@@ -21,6 +23,7 @@
 
 int setup_completed = 0;
 
+// Multiboot Yapısı
 struct multiboot_info {
     uint32_t flags; uint32_t mem_lower; uint32_t mem_upper; uint32_t boot_device;
     uint32_t cmdline; uint32_t mods_count; uint32_t mods_addr; uint32_t num;
@@ -33,15 +36,17 @@ struct multiboot_info {
 } __attribute__((packed));
 
 uint32_t* vbe_vram = (uint32_t*)0xE0000000; 
-uint32_t  vbe_pitch = SCREEN_WIDTH * 4; 
+uint32_t  vbe_pitch = SCREEN_WIDTH * 4; // Varsayılan pitch değeri
 uint32_t  back_buffer[TOTAL_PIXELS]; 
 
+/* Donanımdan veri okuyan Assembly köprüsü */
 static inline uint8_t inb(uint16_t port) {
     uint8_t data;
     __asm__ __volatile__("inb %1, %0" : "=a"(data) : "Nd"(port));
     return data;
 }
 
+/* Linker hatasını önleyen eski ASM köprü fonksiyonu */
 void keyboard_handler_c(void) {
     volatile uint8_t status = inb(KEYBOARD_STATUS_PORT);
     if (status & 0x01) {
@@ -50,6 +55,7 @@ void keyboard_handler_c(void) {
     }
 }
 
+/* Tarama Kodunu ASCII karakterine çeviren harita */
 char scancode_to_ascii(unsigned char scancode) {
     switch(scancode) {
         case 0x1E: return 'A'; case 0x30: return 'B'; case 0x2E: return 'C';
@@ -67,6 +73,7 @@ char scancode_to_ascii(unsigned char scancode) {
     }
 }
 
+// Grafik Çizim Araçları (Back Buffer Tabanlı)
 void draw_background_gradient(void) {
     for (int y = 0; y < SCREEN_HEIGHT; y++) {
         uint8_t r1 = (COLOR_BG_TOP >> 16) & 0xFF; uint8_t g1 = (COLOR_BG_TOP >> 8) & 0xFF; uint8_t b1 = COLOR_BG_TOP & 0xFF;
@@ -225,7 +232,9 @@ void render_interface(void) {
         }
     }
 
-    uint32_t pixels_per_pitch = vbe_pitch / 4;
+    // 🛠️ KRİTİK KOORDİNAT DÜZELTMESİ:
+    // Back buffer'daki pikselleri gerçek VRAM'e aktarırken donanımın 'vbe_pitch' hizalamasını kullanıyoruz!
+    uint32_t pixels_per_pitch = vbe_pitch / 4; 
     for (int y = 0; y < SCREEN_HEIGHT; y++) {
         for (int x = 0; x < SCREEN_WIDTH; x++) {
             vbe_vram[y * pixels_per_pitch + x] = back_buffer[y * SCREEN_WIDTH + x];
@@ -233,10 +242,14 @@ void render_interface(void) {
     }
 }
 
+// Ana Çekirdek Girişi
 void kernel_main(struct multiboot_info* mboot) {
-    if (mboot != 0 && mboot->framebuffer_addr != 0) {
-        vbe_vram = (uint32_t*)mboot->framebuffer_addr;
-        vbe_pitch = mboot->framebuffer_pitch;
+    // Multiboot yapısından donanımsal LFB (Linear Framebuffer) bilgilerini çek
+    if (mboot != 0) {
+        if (mboot->framebuffer_addr != 0) {
+            vbe_vram = (uint32_t*)(uintptr_t)mboot->framebuffer_addr;
+            vbe_pitch = mboot->framebuffer_pitch; // Ekran kartının gerçek satır genişliği!
+        }
     }
 
     init_mouse();          
@@ -247,15 +260,12 @@ void kernel_main(struct multiboot_info* mboot) {
         handle_mouse_polling(); 
         check_keyboard();       
         
-        // 🛠️ Akıcılık Düzeltmesi: Her döngüde render geciktirmek yerine
-        // sadece fare hareket ettikçe veya belirli aralıklarla çizim yapılır.
         refresh_counter++;
         if (refresh_counter >= 150) { 
             render_interface(); 
             refresh_counter = 0;
         }
         
-        // İşlemcinin çok ısınmasını engelleyen minimal donanım dinlendirmesi
         for (volatile int i = 0; i < 50; i++); 
     }
 }

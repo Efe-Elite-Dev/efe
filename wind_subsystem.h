@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-/* Wind OS Multiboot Standart Grafik ve Donanım Bilgi Yapısı */
 struct multiboot_info {
     uint32_t flags;
     uint32_t mem_lower;
@@ -34,7 +33,7 @@ struct multiboot_info {
     uint8_t  framebuffer_type;
 };
 
-/* Donanımsal I/O Port Bağlantıları */
+/* Donanımsal Saf Assembly Port Fonksiyonları */
 static inline void outb(uint16_t port, uint8_t data) {
     asm volatile("outb %0, %1" : : "a"(data), "Nd"(port));
 }
@@ -45,6 +44,21 @@ static inline uint8_t inb(uint16_t port) {
     return ret;
 }
 
-int get_wind_status(void);
+/* Çekirdek Sürücü ve Arayüz Fonksiyonları */
+void init_idt(void);
+void clear_text_screen(void);
+void gui_refresh_desktop(void);
+void run_exe_subsystem(void);
 
-#endif /* WIND_SUBSYSTEM_H */
+/* Yeni Nesil AI Odaları Protokolleri */
+void init_mouse(void);
+void handle_mouse_polling(void);
+int ai_mouse_analyze_stress(void);
+
+void init_keyboard(void);
+void check_keyboard_pure(void);
+int ai_keyboard_analyze_cadence(void);
+
+int ai_core_predict_scheduler(int mouse_stress, int kb_cadence, int loop_count);
+
+#endif

@@ -1,11 +1,11 @@
 #include "wind_subsystem.h"
 
-/* Ekran kartının gerçek bellek göstergeleri */
+/* Gerçek VRAM Göstergeleri */
 uint32_t* vbe_vram = 0; 
 uint32_t  vbe_pitch = 0;
 
-/* DOUBLE BUFFERING ZIRHI: Ekrandaki git-gelleri önleyen gizli RAM ekranı */
-uint32_t back_buffer[800 * 600]; 
+/* HAFIZA ZIRHI: 1.9 MB'lık tamponu 16MB fiziksel adresine çiviliyoruz (Yığın Taşması Engellendi!) */
+uint32_t* back_buffer = (uint32_t*)0x01000000; 
 
 int kernel_ai_total_loops = 0;
 
@@ -13,7 +13,7 @@ static inline void io_wait(void) {
     asm volatile ("outb %%al, $0x80" : : "a"(0));
 }
 
-/* Gizli ekrandaki tüm pikselleri tek bir hamlede gerçek ekran kartına kopyalayan motor */
+/* Arka tamponda hazırlanan resmi tek seferde gerçek ekrana basan motor */
 void swap_buffers(void) {
     uint32_t pixels_per_line = vbe_pitch / 4;
     for (int y = 0; y < 600; y++) {
@@ -23,7 +23,6 @@ void swap_buffers(void) {
     }
 }
 
-/* WIND OS YAPAY ZEKA DESTEKLİ ANA MOTOR */
 void kernel_main(struct multiboot_info* mboot) {
     if (mboot != 0 && (mboot->flags & (1 << 12)) && (mboot->framebuffer_addr != 0)) {
         vbe_vram = (uint32_t*)(uintptr_t)mboot->framebuffer_addr;
@@ -44,30 +43,25 @@ void kernel_main(struct multiboot_info* mboot) {
     while (1) {
         kernel_ai_total_loops++;
         
-        /* 1. Sürücü odalarını dinle */
         handle_mouse_polling(); 
         check_keyboard_pure();  
         
-        /* 2. AI Tahminlerini topla */
         int m_stress = ai_mouse_analyze_stress();
         int k_cadence = ai_keyboard_analyze_cadence();
         int central_ai_decision = ai_core_predict_scheduler(m_stress, k_cadence, kernel_ai_total_loops);
         
-        /* 3. ARKA TAMPONDA ÇİZİM (Her şey gizli ekranda hazırlanıyor) */
+        /* Çizimler artık doğrudan arka plana yapılıyor, git-gel imkansız */
         refresh_counter++;
-        if (refresh_counter >= 8) { 
-            /* Önce arka planı gizli ekrande temizle, göz kırpma yapamaz! */
+        if (refresh_counter >= 5) { 
             gui_refresh_desktop();  
-            /* Sonra pencereleri gizli ekrana çiz */
             run_exe_subsystem(); 
             
-            /* 4. ZIRHLI GEÇİŞ: Hazır olan gizli ekranı anında gerçek ekrana fırlat */
+            /* Jilet gibi geçiş */
             swap_buffers();
-            
             refresh_counter = 0;
         }
         
-        /* 5. AI Tahminli Dinamik Zamanlayıcı */
+        /* CENTRAL AI Kararına Göre İşlemci Hız Kontrolü */
         if (central_ai_decision == 2) {
             current_wait_cycles = 4;   
         } else if (central_ai_decision == 1) {

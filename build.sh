@@ -1,23 +1,38 @@
-cat << 'EOF' > build.sh
 #!/bin/bash
-echo "=== Sky-OS Derleme İşlemi Başladı ==="
+echo "=== Sky-OS Modern Monolitik Derleme Süreci Başladı ==="
 
-# 1. Assembly Bootloader'ı derle
+# 1. Eski kalıntıları ve bozuk bin dosyalarını tamamen temizle
+rm -f *.o *.bin *.iso
+rm -rf iso
+
+# 2. Assembly Boot Sürücüsünü Derle
+echo "-> boot.asm derleniyor..."
 nasm -f elf32 boot.asm -o boot.o
 
-# 2. Tüm C modüllerini tek tek nesne dosyalarına (.o) çevir
-gcc -m32 -c kernel.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
-gcc -m32 -c gui.c -o gui.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
+# 3. Yeni Modern Çekirdeği (Kernel C) Optimize Bayraklarla Derle
+echo "-> Yeni modern kernel.c derleniyor..."
+gcc -m32 -c kernel.c -o kernel.o -std=gnu99 -ffreestanding -Os -Wall -Wextra -fno-asynchronous-unwind-tables -fno-stack-protector
 
-# 3. Linker ile hepsini tek bir pürüzsüz binary dosyada birleştir (Çıktıyı SkyOS.bin yapıyoruz)
-ld -m elf_i386 -T linker.ld boot.o kernel.o gui.o -o SkyOS.bin
+# 4. Sadece boot.o ve yeni kernel.o dosyalarını Linker ile birleştir
+echo "-> Nesne dosyaları güvenli şekilde bağlanıyor..."
+ld -m elf_i386 -T linker.ld boot.o kernel.o -o mykernel.bin
 
-# 4. ISO hazırlığı için klasör kontrolü yap ve kopyala
+# 5. GRUB ve ISO Dağıtım Klasörünü Sıfırdan Oluştur
+echo "-> ISO paketlemesi hazırlanıyor..."
 mkdir -p iso/boot/grub
-cp SkyOS.bin iso/boot/
+cp mykernel.bin iso/boot/
 
-# 5. Bootable ISO dosyasını oluştur
+# Temiz GRUB Yapılandırması
+cat << 'EOF' > iso/boot/grub/grub.cfg
+set timeout=0
+set default=0
+menuentry "SkyOS" {
+    multiboot /boot/mykernel.bin
+    boot
+}
+EOF
+
+# ISO Dosyasını Üret
 grub-mkisofs -o skyos.iso iso
 
-echo "=== skyos.iso Başarıyla Hazırlandı! ==="
-EOF
+echo "=== KRAL, İŞLEM TAMAM! skyos.iso Sıfır Hata İle Hazırlandı! ==="

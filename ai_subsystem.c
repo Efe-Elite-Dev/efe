@@ -1,8 +1,20 @@
 #include "wind_subsystem.h"
-#include "ai_subsystem.h"
 
-int ai_predict_hardware_load(int mouse_delta_x, int loop_count) {
-    if (mouse_delta_x < 0) mouse_delta_x = -mouse_delta_x;
-    int core_load = (mouse_delta_x * 3) + ((loop_count % 30) * 2);
-    return (core_load > 250) ? 1 : 0;
+/* AI Global Durum Değişkenleri */
+int central_ai_prediction_level = 0;
+
+/* AI CORE: Diğer odaların yapay zeka analizlerini birleştirip merkezi tahminde bulunur */
+int ai_core_predict_scheduler(int mouse_stress, int kb_cadence, int loop_count) {
+    /* Matris tabanlı donanım yükü ve kullanıcı stres seviyesi simülasyon algoritması */
+    int decision_matrix = (mouse_stress * 3) + (kb_cadence * 5) + (loop_count % 10);
+    
+    if (decision_matrix > 50) {
+        central_ai_prediction_level = 2; /* Yüksek Performans / Turbo Mod */
+    } else if (decision_matrix > 20) {
+        central_ai_prediction_level = 1; /* Standart Mod */
+    } else {
+        central_ai_prediction_level = 0; /* Güç Koruma Modu / Boşta */
+    }
+    
+    return central_ai_prediction_level;
 }

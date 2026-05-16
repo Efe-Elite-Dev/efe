@@ -1,36 +1,42 @@
-#ifndef GUI_H
-#define GUI_H
+#include "sky_subsystem.h"
 
-#include <stdint.h>
+// kernel.c içinden gelen gerçek donanım adres köprüleri
+extern uint32_t* vbe_vram;
+extern uint32_t  vbe_pitch;
 
-#define VBE_START_ADDR  0xE0000000  
-#define SCREEN_WIDTH    1024
-#define SCREEN_HEIGHT   768
+void gui_refresh_desktop(void) {
+    // KORUMA: Eğer kernel henüz VRAM adresini yakalayamadıysa çizim yapıp sistemi kilitleme
+    if (vbe_vram == 0) {
+        return;
+    }
 
-#define COLOR_TASKBAR          0xCCF2F7FF  
-#define COLOR_SEARCH_BAR       0xFFFFFFFF  
-#define COLOR_MODERN_CURSOR    0x0067C0    
-#define COLOR_WIN_TITLE        0x0F172A    
-#define COLOR_MODERN_RED       0xE81123    
+    // VirtualBox için milimetrik satır genişliği hesabı (uint32_t cinsinden pitch)
+    // Donanımsal pitch byte cinsindendir, 4 byte'a (32-bit) bölerek piksel adedini buluyoruz
+    uint32_t width_pixels = vbe_pitch / 4; 
 
-extern int active_window;
+    // Çözünürlüğü garantiye alalım (800x600 standart multiboot modu)
+    uint32_t screen_width = 800;
+    uint32_t screen_height = 600;
 
-// Alt sistemlerin prototiplerini de buraya paslıyoruz
-void run_exe_subsystem(int win_x, int win_y);
-void run_deb_subsystem(int win_x, int win_y);
-void run_sky_subsystem(int win_x, int win_y, uint32_t current_tick);
+    // TÜM EKRANI TEMİZ BİR SKI BLUE / MOR RENGE BOYAMA DÖNGÜSÜ
+    for (uint32_t y = 0; y < screen_height; y++) {
+        for (uint32_t x = 0; x < screen_width; x++) {
+            
+            // === KRİTİK HİZALAMA FORMÜLÜ ===
+            // Çizgilerin üst üste binmesini engelleyen asıl siber formül budur!
+            uint32_t pixel_index = (y * width_pixels) + x;
+            
+            // Şık bir işletim sistemi arka plan rengi (Örn: Derin Gece Mavisi/Mor -> 0x1A1A2E)
+            vbe_vram[pixel_index] = 0x1A1A2E; 
+        }
+    }
 
-// Fonksiyon tanımlamaları (Hafıza şişmesini önlemek için inline kaldırıldı)
-void gui_put_pixel(int x, int y, uint32_t color);
-uint32_t mix_colors(uint32_t bg, uint32_t fg, uint8_t alpha);
-void gui_draw_rect_alpha(int start_x, int start_y, int width, int height, uint32_t color, uint8_t alpha);
-void gui_draw_rect(int start_x, int start_y, int width, int height, uint32_t color);
-void gui_draw_rounded_window(int sx, int sy, int w, int h, int r, uint32_t color, uint8_t alpha);
-void gui_render_wallpaper(void);
-void gui_draw_icons(void);
-void gui_draw_window_frame(int win_x, int win_y, int win_w, int win_h);
-void gui_render_taskbar(uint32_t tick_count);
-void gui_draw_mouse(int mx, int my);
-void gui_refresh_desktop(int mx, int my, uint32_t tick);
-
-#endif
+    // === ÖRNEK MASAÜSTÜ LOGOSU VEYA PENCERESİ ===
+    // Ekranın ortasına minik, temiz beyaz bir siber kare çizelim ki çalıştığını anlayalım
+    for (uint32_t y = 250; y < 350; y++) {
+        for (uint32_t x = 350; x < 450; x++) {
+            uint32_t pixel_index = (y * width_pixels) + x;
+            vbe_vram[pixel_index] = 0xFFFFFF; // Saf Beyaz
+        }
+    }
+}

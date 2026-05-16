@@ -36,4 +36,8 @@ extern uint32_t  vbe_pitch;
 extern uint32_t  back_buffer[TOTAL_PIXELS];
 extern int setup_completed;
 
+// === GUI VE ALT SİSTEM KÖPRÜLERİ ===
+extern int active_window;
+void run_sky_subsystem(void);
+
 #endif // SKY_SUBSYSTEM_H

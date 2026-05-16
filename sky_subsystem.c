@@ -1,13 +1,6 @@
 #include "sky_subsystem.h"
-#include "ai_subsystem.h"
 
-void run_sky_subsystem(int win_x, int win_y, uint32_t current_tick) {
-    gui_draw_rect(win_x + 15, win_y + 45, 470, 290, 0x0F172A);
-    gui_draw_rect(win_x + 35, win_y + 65, 30, 30, 0xFFB900);
-    gui_draw_rect(win_x + 80, win_y + 75, 120, 12, 0x38BDF8); 
-
-    uint32_t fake_input_hash = (current_tick / 100); 
-    int current_intent = sky_ai_analyze_intent(fake_input_hash);
-
-    run_ai_core_render(win_x, win_y, current_tick, current_intent);
-}
+uint32_t* vbe_vram = (uint32_t*)0xE0000000;
+uint32_t  vbe_pitch = SCREEN_WIDTH * 4;
+uint32_t  back_buffer[TOTAL_PIXELS];
+int setup_completed = 0;

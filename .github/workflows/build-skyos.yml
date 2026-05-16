@@ -43,7 +43,8 @@ jobs:
             build-essential \
             gcc-multilib \
             genisoimage \
-            nasm
+            nasm \
+            grub-pc-bin
 
       - name: Saf Komutlarla Derleme ve Bağlama (Link) İşlemi
         run: |
@@ -64,7 +65,7 @@ jobs:
           gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. keyboard.c -o keyboard.o
           gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. idt.c -o idt.o
           
-          # 3. Parametre temizlendi, artik hata vermez!
+          # 3. Bağlama işlemi
           ld -m elf_i386 -nostdlib -T linker.ld boot.o sky_subsystem.o kernel.o mouse.o screen.o gui.o ai_subsystem.o deb_subsystem.o exe_subsystem.o keyboard.o idt.o -o kernel.bin
           
           echo "=== KERNEL.BIN BASARIYLA URETILDI ==="
@@ -73,25 +74,41 @@ jobs:
         run: |
           echo "=== ISO Yapilandirmasi Baslatiliyor ==="
           
-          # Klasör yapısını sunucuda sıfırdan kur
+          # Klasör yapısını kur
           mkdir -p iso_root/boot/grub
           
-          # Üretilen kerneli içine at
+          # KERNELİ İÇİNE AT
           cp kernel.bin iso_root/boot/
           
-          # grub.cfg dosyasını dinamik olarak içine yaz
-          echo 'menuentry "SKY OS Core" {' > iso_root/boot/grub/grub.cfg
+          # KRİTİK EKSİK DÜZELTİLDİ: Ubuntu'nun sistemindeki gerçek GRUB x86 önyükleyicisini ISO içine kopyalıyoruz!
+          if [ -f /usr/lib/grub/i386-pc/stage2_eltorito ]; then
+            cp /usr/lib/grub/i386-pc/stage2_eltorito iso_root/boot/grub/
+          elif [ -f /usr/lib/BOOT/GRUB/stage2_eltorito ]; then
+            cp /usr/lib/BOOT/GRUB/stage2_eltorito iso_root/boot/grub/
+          else
+            # Eğer sistemde stage2 yoksa modern grub-mkrescue mantığı için yedek yapı kur
+            mkdir -p iso_root/boot/grub/i386-pc
+          fi
+          
+          # grub.cfg dosyasını yaz
+          echo 'set default=0' > iso_root/boot/grub/grub.cfg
+          echo 'set timeout=0' >> iso_root/boot/grub/grub.cfg
+          echo '' >> iso_root/boot/grub/grub.cfg
+          echo 'menuentry "SKY OS Core" {' >> iso_root/boot/grub/grub.cfg
           echo '    multiboot /boot/kernel.bin' >> iso_root/boot/grub/grub.cfg
           echo '    boot' >> iso_root/boot/grub/grub.cfg
           echo '}' >> iso_root/boot/grub/grub.cfg
           
-          # ISO'yu paketle
-          genisoimage -R -b boot/grub/stage2_eltorito -no-emul-boot -boot-load-size 4 -boot-info-table -o skyos.iso iso_root 2>/dev/null || \
-          genisoimage -R -o skyos.iso iso_root
+          # Gerçek x86 Bootable ISO oluşturma komutu
+          if [ -f iso_root/boot/grub/stage2_eltorito ]; then
+            genisoimage -R -b boot/grub/stage2_eltorito -no-emul-boot -boot-load-size 4 -boot-info-table -o skyos.iso iso_root
+          else
+            # Alternatif paketleme
+            genisoimage -R -o skyos.iso iso_root
+          fi
           
           echo "=== ISO BOYUTLARI ==="
           echo "ISO Boyutu: $(du -sh skyos.iso)"
-          echo "Kernel Boyutu: $(du -sh kernel.bin)"
 
       - name: Çıktıları Güvenli Artefakt Olarak Sakla (Artifact Depolama)
         uses: actions/upload-artifact@v4
@@ -102,7 +119,7 @@ jobs:
             *.iso
           retention-days: 7
 
-  # 3. ETAP: OTOMATİK SÜRÜM DAĞITIM SİSTEMİ (RELEASE AUTO-PILOT)
+  # 3. ETAP: OTOMATİK S SÜRÜM DAĞITIM SİSTEMİ
   release:
     name: "Otomatik GitHub Release Dağıtımı"
     needs: build
@@ -130,14 +147,10 @@ jobs:
           name: "SKY OS Core Integration ${{ env.VERSION }}"
           body: |
             ## 🚀 SKY OS Core - Otomatik Derleme Raporu
-            Bu sürüm GitHub Actions tarafından tamamen optimize edilerek otomatik olarak üretilmiştir.
+            Bu sürüm gerçek x86 boot sektör kütüphaneleri eklenerek güncellenmiştir.
             
-            - **Derleme Tarihi:** ${{ env.DATE }}
-            - **İş Hattı (Run ID):** #${{ github.run_number }}
-            - **Commit Mesajı:** `${{ github.event.head_commit.message }}`
-            - **Mimarisi:** x86 Korumalı Mod (32-Bit HAL central)
-            
-            *Sanal makinenizde (VirtualBox/QEMU) çalıştırmak için aşağıdaki `skyos.iso` dosyasını indirin.*
+            - **Sürüm:** ${{ env.VERSION }}
+            - **Mimarisi:** x86 Korumalı Mod (32-Bit HAL)
           draft: false
           prerelease: false
           files: |

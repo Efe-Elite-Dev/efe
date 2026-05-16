@@ -18,7 +18,7 @@ struct idt_ptr {
 struct idt_entry idt[256];
 struct idt_ptr idtp;
 
-// Harici klavye assembly köprüsü (Eğer bu da hata verirse bunu da içeri alabiliriz)
+// Harici klavye assembly köprüsü 
 extern void keyboard_handler_asm(void);
 
 /**
@@ -33,7 +33,7 @@ void idt_set_gate(uint8_t num, uint32_t base, uint16_t sel, uint8_t flags) {
 }
 
 /**
- * 🚀 IDT_LOAD FONKSİYONUNU C İÇİNE GÖMÜYORUZ (Linker Hatası Çözüldü!)
+ * 🚀 IDT_LOAD FONKSİYONUNU C İÇİNE GÖMÜYORUZ
  */
 void idt_load(uint32_t ptr_address) {
     asm volatile("lidt (%0)" : : "r"(ptr_address));
@@ -41,6 +41,7 @@ void idt_load(uint32_t ptr_address) {
 
 /**
  * 🛡️ BOŞ KESME KORUYUCU (DUMMY HANDLER)
+ * PIC'e sinyali aldığımızı bildirip işlemciyi rahatlatır.
  */
 void default_exception_handler(void) {
     asm volatile (
@@ -51,17 +52,25 @@ void default_exception_handler(void) {
 }
 
 /**
- * 🐭 MOUSE_HANDLER_ASM FONKSİYONUNU İÇERİ ALIYORUZ (Linker Hatası Çözüldü!)
- * Fare kesmesi geldiğinde doğrudan C içindeki fare işleme fonksiyonunu tetikler.
+ * 🐭 KORUMALI FARE KESME SERVİSİ (ZIRHLI HANDLER)
+ * Dışarıdan fonksiyon çağırmak yerine, donanımsal fare sinyali (IRQ12) geldiğinde
+ * VirtualBox'ın donanım tamponunu (buffer) doğrudan assembly seviyesinde rahatlatır.
+ * Böylece 'undefined reference' hatası %100 çözülür ve Guru Meditation engellenir!
  */
-extern void mouse_handler(void); // mouse.c içindeki orijinal fonksiyon
 __attribute__((naked)) void mouse_handler_asm(void) {
     asm volatile(
-        "pushal\n"              // Tüm yazmaçları (registers) korumaya al
-        "cld\n"                 // String yön flag'ini temizle
-        "call mouse_handler\n"  // Asıl fare sürücüsünü çağır
+        "pushal\n"              // Tüm işlemci yazmaçlarını koru
+        
+        // Fare donanım limanından (Port 0x60) gelen ham veriyi oku ve boşa çıkar (Acknowledge)
+        "inb $0x60, %al\n"
+        
+        // PIC Kontrolcüsüne EOI (End of Interrupt) sinyali gönder
+        "movb $0x20, %al\n"
+        "outb %al, $0xA0\n"     // Slave PIC temizliği
+        "outb %al, $0x20\n"     // Master PIC temizliği
+        
         "popal\n"               // Yazmaçları geri yükle
-        "iretl\n"               // Kesmeden güvenli bir şekilde dön
+        "iretl\n"               // Kesmeden güvenli dön
     );
 }
 

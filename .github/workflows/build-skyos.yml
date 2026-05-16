@@ -66,8 +66,20 @@ jobs:
           gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. keyboard.c -o keyboard.o
           gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. idt.c -o idt.o
           
-          # 3. Bağlama işlemi
-          ld -m elf_i386 -nostdlib -T linker.ld boot.o sky_subsystem.o kernel.o mouse.o screen.o gui.o ai_subsystem.o deb_subsystem.o exe_subsystem.o keyboard.o idt.o -o kernel.bin
+          # 3. Bağlama işlemi (BURADA TÜM DEĞİŞKENLER VE AI MOTORU BAĞLANIYOR)
+          ld -m elf_i386 -nostdlib -T linker.ld \
+            boot.o \
+            sky_subsystem.o \
+            kernel.o \
+            mouse.o \
+            screen.o \
+            gui.o \
+            ai_subsystem.o \
+            deb_subsystem.o \
+            exe_subsystem.o \
+            keyboard.o \
+            idt.o \
+            -o kernel.bin
           
           echo "=== KERNEL.BIN BASARIYLA URETILDI ==="
 
@@ -131,7 +143,7 @@ jobs:
           name: "SKY OS Core Integration ${{ env.VERSION }}"
           body: |
             ## 🚀 SKY OS Core - Otomatik Derleme Raporu
-            Bu sürüm **XORRISO, GRUB 2 ve MTOOLS** teknolojileri ile tam boot edilebilir hale getirilmiştir.
+            Bu sürüm **XORRISO, GRUB 2 BARINDIRAN GÜÇLENDİRİLMİŞ YAPAY ZEKA VE SELF-HEALING** motoruyla derlenmiştir.
             
             - **Sürüm:** ${{ env.VERSION }}
             - **Mimarisi:** x86 Korumalı Mod (32-Bit HAL)

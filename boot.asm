@@ -31,13 +31,13 @@ _start:
     call kernel_main
     jmp $
 
-# === IDT Yükleme Fonksiyonu ===
+; === IDT Yukleme Fonksiyonu ===
 load_idt:
     mov edx, [esp + 4]  ; C kodundan gelen IDT pointer adresini al
     lidt [edx]          ; İşlemciye IDT'yi yükle
     ret                 ; C koduna geri dön
 
-# === Klavye Kesme Köprüsü (Sihirli Kısım) ===
+; === Klavye Kesme Koprusu (Sihirli Kisim) ===
 keyboard_handler_asm:
     pusha               ; Tüm genel amaçlı kayıtçıları (registers) korumaya al
     call keyboard_handler_c ; Asıl işi yapacak olan C fonksiyonunu çağır

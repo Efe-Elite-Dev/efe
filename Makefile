@@ -1,33 +1,26 @@
 CC = gcc
-AS = nasm
-LDFLAGS = -m32 -nostdlib -nodefaultlibs -T linker.ld
-CFLAGS = -m32 -c -ffreestanding -O2 -Wall -Wextra -I.
+CFLAGS = -m32 -ffreestanding -O2 -Wall -Wextra -fno-pie -fno-stack-protector
+LDFLAGS = -m32 -T linker.ld -nostdlib -no-pie
 
-OBJS = boot.o sky_subsystem.o kernel.o mouse.o screen.o gui.o ai_subsystem.o deb_subsystem.o exe_subsystem.o keyboard.o idt.o
+OBJS = boot.o kernel.o gui.o exe_subsystem.o ai_subsystem.o mouse.o wind_subsystem.o keyboard.o screen.o idt.o deb_subsystem.o
 
-all: skyos.iso
+all: windos.iso
 
-boot.o: boot.asm
-	$(AS) -f elf32 boot.asm -o boot.o
+windos.iso: kernel.bin grub.cfg
+	mkdir -p isodir/boot/grub
+	cp kernel.bin isodir/boot/kernel.bin
+	cp grub.cfg isodir/boot/grub/grub.cfg
+	grub-mkrescue -o windos.iso isodir
+
+kernel.bin: $(OBJS) linker.ld
+	$(CC) $(LDFLAGS) -o kernel.bin $(OBJS)
 
 %.o: %.c
-	$(CC) $(CFLAGS) $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
-kernel.bin: $(OBJS)
-	ld $(LDFLAGS) $(OBJS) -o kernel.bin
-
-skyos.iso: kernel.bin
-	mkdir -p iso_root/boot/grub
-	cp kernel.bin iso_root/boot/
-	@if [ ! -f iso_root/boot/grub/grub.cfg ]; then \
-		echo 'menuentry "SKY OS Core" {' > iso_root/boot/grub/grub.cfg; \
-		echo '    multiboot /boot/kernel.bin' >> iso_root/boot/grub/grub.cfg; \
-		echo '    boot' >> iso_root/boot/grub/grub.cfg; \
-		echo '}' >> iso_root/boot/grub/grub.cfg; \
-	fi
-	genisoimage -R -b boot/grub/stage2_eltorito -no-emul-boot -boot-load-size 4 -boot-info-table -o skyos.iso iso_root 2>/dev/null || \
-	grub-mkrescue -o skyos.iso iso_root || \
-	genisoimage -R -o skyos.iso iso_root
+%.o: %.asm
+	nasm -f elf32 $< -o $@
 
 clean:
-	rm -rf *.o kernel.bin skyos.iso iso_root
+	rm -f *.o kernel.bin windos.iso
+	rm -rf isodir

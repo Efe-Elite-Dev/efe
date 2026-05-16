@@ -1,63 +1,81 @@
-bits 32
-
-; Multiboot Makroları
-MODULEALIGN equ 1 << 0
-MEMINFO     equ 1 << 1
-GRAPHICS    equ 1 << 2  ; GRUB'a VBE Grafik Modunu zorla açtırır
-FLAGS       equ MODULEALIGN | MEMINFO | GRAPHICS
-MAGIC       equ 0x1BADB002
-CHECKSUM    equ -(MAGIC + FLAGS)
+MBOOT_PAGE_ALIGN    equ 1 << 0
+MBOOT_MEM_INFO      equ 1 << 1
+MBOOT_GRAPHICS      equ 1 << 2
+MBOOT_HEADER_MAGIC  equ 0x1BADB002
+MBOOT_HEADER_FLAGS  equ MBOOT_PAGE_ALIGN | MBOOT_MEM_INFO | MBOOT_GRAPHICS
+MBOOT_CHECKSUM      equ -(MBOOT_HEADER_MAGIC + MBOOT_HEADER_FLAGS)
 
 section .multiboot
 align 4
-    dd MAGIC
-    dd FLAGS
-    dd CHECKSUM
-    
-    ; Grafik ayarları için GRUB dolgu alanları
-    dd 0, 0, 0, 0, 0
-    dd 0        ; 0 = Lineer Grafik (LFB) Modu
-    dd 800      ; Ekran Genişliği
-    dd 600      ; Ekran Yüksekligi
-    dd 32       ; Renk Derinliği (BPP)
+    dd MBOOT_HEADER_MAGIC
+    dd MBOOT_HEADER_FLAGS
+    dd MBOOT_CHECKSUM
+    dd 0
+    dd 0
+    dd 0
+    dd 0
+    dd 0
+    dd 0        
+    dd 800      ; Çözünürlük Genişlik
+    dd 600      ; Çözünürlük Yükseklik
+    dd 32       ; BPP Derinliği
+
+section .bootstrap_stack, nobits
+align 16
+stack_bottom:
+    resb 16384
+stack_top:
 
 section .text
 global _start
-global load_idt
-global keyboard_handler_asm
-
 extern kernel_main
-extern keyboard_handler  ; keyboard.c veya idt.c içindeki C fonksiyonun
 
 _start:
-    cli                         ; Kesmeleri kapat
-    mov esp, stack_space        ; Güvenli Stack alanını yükle
+    mov esp, stack_top
+    push ebx
+    cli
+    call kernel_main
 
-    ; === MULTIBOOT KÖPRÜSÜ ===
-    push ebx                    ; GRUB multiboot_info adresini C çekirdeğine pasla
-    
-    call kernel_main            ; Çekirdeği başlat
-
-.hang:
+.halt:
     hlt
-    jmp .hang
+    jmp .haltMBOOT_PAGE_ALIGN    equ 1 << 0
+MBOOT_MEM_INFO      equ 1 << 1
+MBOOT_GRAPHICS      equ 1 << 2
+MBOOT_HEADER_MAGIC  equ 0x1BADB002
+MBOOT_HEADER_FLAGS  equ MBOOT_PAGE_ALIGN | MBOOT_MEM_INFO | MBOOT_GRAPHICS
+MBOOT_CHECKSUM      equ -(MBOOT_HEADER_MAGIC + MBOOT_HEADER_FLAGS)
 
-; === IDT TABLOSUNU İŞLEMCİYE YÜKLEYEN ASKER ===
-load_idt:
-    mov edx, [esp + 4]          ; C'den gelen IDT pointer adresini al
-    lidt [edx]                  ; IDT'yi CPU'ya yükle
-    sti                         ; Kesmeleri tekrar aktif et
-    ret
+section .multiboot
+align 4
+    dd MBOOT_HEADER_MAGIC
+    dd MBOOT_HEADER_FLAGS
+    dd MBOOT_CHECKSUM
+    dd 0
+    dd 0
+    dd 0
+    dd 0
+    dd 0
+    dd 0        
+    dd 800      ; Çözünürlük Genişlik
+    dd 600      ; Çözünürlük Yükseklik
+    dd 32       ; BPP Derinliği
 
-; === KLAVYE INTERRUPT KÖPRÜSÜ (IRQ 1) ===
-keyboard_handler_asm:
-    pusha                       ; Tüm genel amaçlı yazmaçları korumaya al
-    call keyboard_handler       ; C dilindeki asıl klavye işleyicisini çağır
-    popa                        ; Yazmaçları geri yükle
-    iretd                       ; Kesme dönüşü yap (Interrupt Return)
-
-section .bss
+section .bootstrap_stack, nobits
 align 16
 stack_bottom:
-resb 16384                      ; Çekirdek için 16KB güvenli çalışma alanı
-stack_space:
+    resb 16384
+stack_top:
+
+section .text
+global _start
+extern kernel_main
+
+_start:
+    mov esp, stack_top
+    push ebx
+    cli
+    call kernel_main
+
+.halt:
+    hlt
+    jmp .halt

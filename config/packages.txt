@@ -1,4 +1,4 @@
-# Wind OS Varsayılan Sistem Paketleri
+# Wind OS Çekirdek Paket Dağıtım Listesi
 base-system
 wind-core-gui
 mouse-polling-driver

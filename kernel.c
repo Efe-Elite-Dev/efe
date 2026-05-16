@@ -6,8 +6,9 @@ extern void gui_refresh_desktop(void);
 extern int ai_predict_hardware_load(int mouse_delta_x, int loop_count);
 
 // === DONANIM ADRES KÖPRÜLERİ ===
-uint32_t* vbe_vram = (uint32_t*)0xE0000000; 
-uint32_t  vbe_pitch = 800 * 4;
+// sky_subsystem.c içindeki asıl değişkenlere extern köprüsü kuruyoruz
+extern uint32_t* vbe_vram; 
+extern uint32_t  vbe_pitch;
 
 // İşlemciyi uyutan donanımsal gecikme fonksiyonu
 static inline void io_wait(void) {
@@ -17,7 +18,6 @@ static inline void io_wait(void) {
 void kernel_main(struct multiboot_info* mboot) {
     // KORUMA KATMANI: Multiboot yapısı var mı ve GRUB grafik modu adresini pasladı mı?
     if (mboot != 0) {
-        // framebuffer_bpp kontrolünü kaldırıp doğrudan adrese kilitleniyoruz
         if (mboot->framebuffer_addr != 0) {
             vbe_vram = (uint32_t*)(uintptr_t)mboot->framebuffer_addr;
             vbe_pitch = mboot->framebuffer_pitch;

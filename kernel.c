@@ -174,6 +174,7 @@ void init_mouse(void) {
     inb(0x60);        
 }
 
+// Geliştirilmiş Fare Dinleyicisi
 void handle_mouse_polling(void) {
     uint8_t status = inb(0x64);
     if ((status & 0x01) && (status & 0x20)) {
@@ -198,33 +199,31 @@ void handle_mouse_polling(void) {
     }
 }
 
+// 🛠️ YENİ AGRESİF KLAVYE POLLING SÜRÜCÜSÜ (KİLİDİ AÇAR)
 void handle_keyboard_polling(void) {
     uint8_t status = inb(0x64);
-    if ((status & 0x01) && !(status & 0x20)) {
-        uint8_t scancode = inb(0x60);
-        if (scancode < 0x80) {
-            char ascii_char = scancode_to_ascii[scancode];
-            if (ascii_char != 0) {
-                sky_put_char(ascii_char);
-                gui_refresh_desktop(mouse_x, mouse_y);
+    // Eğer portta herhangi bir veri varsa (Bit 0 set edilmişse)
+    if (status & 0x01) {
+        // Ama bu veri fareye ait DEĞİLSE (Bit 5 temizse), kesin klavyedir!
+        if (!(status & 0x20)) {
+            uint8_t scancode = inb(0x60);
+            // Tuşa basılma scancode'ları 0x80'den küçüktür (Tuş bırakma sinyallerini filtrele)
+            if (scancode < 0x80) {
+                char ascii_char = scancode_to_ascii[scancode];
+                if (ascii_char != 0) {
+                    sky_put_char(ascii_char);
+                    gui_refresh_desktop(mouse_x, mouse_y);
+                }
             }
         }
     }
 }
 
-// ====================================================================
-// 🔗 ASSEMBLY İLE KÖPRÜ (AÇIK KAYNAK BAĞLANTI FONKSİYONLARI)
-// ====================================================================
-
-// 1. boot.asm içindeki 'keyboard_handler_asm'nin aradığı fonksiyonu buraya bağlıyoruz
 void keyboard_handler_c(void) {
     handle_keyboard_polling();
 }
 
-// 2. boot.asm dosyasında eğer IDT kurulumu yoksa, kernel_main'in çökmesini 
-// önlemek için buraya sahte/boş bir init_idt gömüyoruz (Veya assembly'deki gerçek fonksiyona bağlarız)
 __attribute__((weak)) void init_idt(void) {
-    // Assembly tarafında gerçek init_idt yoksa burası çalışır ve bootloop'u engeller.
 }
 
 // ANA ÇEKİRDEK GİRİŞİ
@@ -253,13 +252,13 @@ void kernel_main(struct multiboot_info* mboot) {
     init_mouse();          
 
     while (1) {
+        handle_keyboard_polling(); // Klavyeye öncelik vermek için döngünün başına çektik
         handle_mouse_polling();
-        handle_keyboard_polling();
         
         system_ticks++;
-        if (system_ticks % 2500 == 0) { 
+        if (system_ticks % 3000 == 0) { 
             gui_refresh_desktop(mouse_x, mouse_y);
         }
-        for (volatile int i = 0; i < 1200; i++); 
+        for (volatile int i = 0; i < 1500; i++); 
     }
 }

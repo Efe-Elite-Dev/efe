@@ -1,56 +1,60 @@
 #include <stdint.h>
 
-// Ekran Çözünürlük Standartları
 #define SCREEN_WIDTH     800
 #define SCREEN_HEIGHT    600
 #define TOTAL_PIXELS     (SCREEN_WIDTH * SCREEN_HEIGHT)
 
-// Windows 11 Arayüz Renk Paleti
+// Windows 11 Fluent Renk Paleti
 #define COLOR_BG         0x0A0F24  
 #define COLOR_TASKBAR    0x1A2342  
-#define COLOR_ACCENT     0x0078D4  
-#define COLOR_WIN_BG     0xFFFFFF  
-#define COLOR_WIN_TITLE  0x0F172A  
-#define COLOR_MODERN_RED 0xE81123  
 #define COLOR_CURSOR     0x00A2ED  
 #define COLOR_TEXT_WHITE 0xFFFFFF
 
-// Sistem Durum Değişkenleri
-int active_window = 0; 
+// ====================================================================
+// GRUB MULTIBOOT GÜVENLİK YAPILARI
+// ====================================================================
+// GRUB'ın bize yolladığı Multiboot Info yapısının resmi x86 standart şeması
+struct multiboot_info {
+    uint32_t flags;
+    uint32_t mem_lower;
+    uint32_t mem_upper;
+    uint32_t boot_device;
+    uint32_t cmdline;
+    uint32_t mods_count;
+    uint32_t mods_addr;
+    uint32_t num;
+    uint32_t size;
+    uint32_t addr;
+    uint32_t shndx;
+    uint32_t vbe_control_info;
+    uint32_t vbe_mode_info;      // VBE Mode Info yapısının adresi (Offset 76)
+    uint16_t vbe_mode;
+    uint16_t vbe_interface_seg;
+    uint16_t vbe_interface_off;
+    uint16_t vbe_interface_len;
+    uint32_t framebuffer_addr;   // Doğrudan LFB Adresi (Offset 88)
+    uint32_t framebuffer_pitch;  // Satır genişliği byte boyutu (Offset 92)
+    uint32_t framebuffer_width;
+    uint32_t framebuffer_height;
+    uint8_t  framebuffer_bpp;
+    uint8_t  framebuffer_type;
+} __attribute__((packed));
+
+// Ekran Kartı Değişkenleri (Guru Meditation Çökme Korumalı Varsayılanlar)
+uint32_t* vbe_vram = (uint32_t*)0xE0000000; 
+uint32_t  vbe_pitch = SCREEN_WIDTH * 4; 
+
 uint32_t system_ticks = 0;
 int mouse_x = 400; 
 int mouse_y = 300; 
 uint8_t mouse_cycle = 0;
 int8_t mouse_byte[3];
 
-// Gerçek Ekran Kartı VRAM Adres İşaretçisi (Dinamik doldurulacak)
-uint32_t* vbe_vram = (uint32_t*)0xE0000000; 
-
-// Font Dosyası Matrisi
+// Sabit Font Matrisi
 unsigned char font_bitmap[128][16] = {
-    ['A'] = {0x18, 0x24, 0x42, 0x42, 0x7E, 0x42, 0x42, 0x42, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['B'] = {0x7C, 0x42, 0x42, 0x42, 0x7C, 0x42, 0x42, 0x42, 0x7C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['C'] = {0x3C, 0x42, 0x42, 0x40, 0x40, 0x40, 0x42, 0x42, 0x3C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['D'] = {0x78, 0x44, 0x42, 0x42, 0x42, 0x42, 0x42, 0x44, 0x78, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['E'] = {0x7E, 0x40, 0x40, 0x40, 0x76, 0x40, 0x40, 0x40, 0x7E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['I'] = {0x3C, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x3C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['K'] = {0x42, 0x44, 0x48, 0x70, 0x50, 0x48, 0x44, 0x42, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['L'] = {0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x7E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['M'] = {0x42, 0x66, 0x5A, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['N'] = {0x42, 0x62, 0x52, 0x4A, 0x46, 0x42, 0x42, 0x42, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['O'] = {0x3C, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x3C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['P'] = {0x7C, 0x42, 0x42, 0x42, 0x7C, 0x40, 0x40, 0x40, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['R'] = {0x7C, 0x42, 0x42, 0x42, 0x7C, 0x48, 0x44, 0x42, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
     ['S'] = {0x3C, 0x42, 0x40, 0x3C, 0x02, 0x02, 0x42, 0x42, 0x3C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['T'] = {0x7E, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['U'] = {0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x3C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['W'] = {0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x5A, 0x66, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['X'] = {0x42, 0x42, 0x24, 0x18, 0x18, 0x24, 0x42, 0x42, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['Y'] = {0x42, 0x42, 0x42, 0x24, 0x18, 0x18, 0x18, 0x18, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['-'] = {0x00, 0x00, 0x00, 0x00, 0x3E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['>'] = {0x40, 0x20, 0x10, 0x08, 0x04, 0x08, 0x10, 0x20, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
-    ['_'] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7E, 0x00},
-    [' '] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+    ['K'] = {0x42, 0x44, 0x48, 0x70, 0x50, 0x48, 0x44, 0x42, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+    ['Y'] = {0x42, 0x42, 0x42, 0x24, 0x18, 0x18, 0x18, 0x18, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 };
 
 uint32_t back_buffer[TOTAL_PIXELS];
@@ -70,31 +74,38 @@ void put_char(char c, int x, int y, uint32_t color) {
     }
 }
 
-void gui_refresh_desktop(int mx, int my, uint32_t tick) {
-    // Çizgi bug'ını önleyen temiz arka plan tamponlama
+void gui_refresh_desktop(int mx, int my) {
+    // 1. Arka planı temizle
     for (int i = 0; i < TOTAL_PIXELS; i++) {
         back_buffer[i] = COLOR_BG;
     }
     
-    // Alt Görev Çubuğu (Taskbar) Çizimi
+    // 2. Taskbar alanını boya
     for (int y = SCREEN_HEIGHT - 40; y < SCREEN_HEIGHT; y++) {
         for (int x = 0; x < SCREEN_WIDTH; x++) {
             back_buffer[y * SCREEN_WIDTH + x] = COLOR_TASKBAR;
         }
     }
 
-    // "SKY" Yazısını mouse imleci yerine bas
+    // 3. Yazıları bas
     put_char('S', mx, my, COLOR_CURSOR);
     put_char('K', mx + 8, my, COLOR_CURSOR);
     put_char('Y', mx + 16, my, COLOR_CURSOR);
     
-    // Çökmeyi önleyen güvenli VRAM kopyalaması
-    for (int i = 0; i < TOTAL_PIXELS; i++) {
-        vbe_vram[i] = back_buffer[i];
+    // 4. ÇÖKMEYİ ENGELLEYEN GÜVENLİ FLUSH ALGORİTMASI
+    // Eğer vbe_vram adresi null ise veya yanlışlıkla patladıysa yazma, çökme!
+    if (vbe_vram == 0) return;
+
+    uint32_t pixels_per_pitch = vbe_pitch / 4; 
+    for (int y = 0; y < SCREEN_HEIGHT; y++) {
+        for (int x = 0; x < SCREEN_WIDTH; x++) {
+            // Çizgilerin kaymasını engelleyen matematiksel senkronizasyon
+            vbe_vram[y * pixels_per_pitch + x] = back_buffer[y * SCREEN_WIDTH + x];
+        }
     }
 }
 
-// Donanım register fonksiyonları
+// PS/2 Donanım Giriş/Çıkış Sürücüleri
 static inline uint8_t inb(uint16_t port) {
     uint8_t data;
     __asm__ __volatile__("inb %1, %0" : "=a"(data) : "Nd"(port));
@@ -103,10 +114,6 @@ static inline uint8_t inb(uint16_t port) {
 
 static inline void outb(uint16_t port, uint8_t val) {
     __asm__ __volatile__("outb %0, %1" : : "a"(val), "Nd"(port));
-}
-
-void sky_kernel_delay(int count) {
-    for (volatile int i = 0; i < count * 800; i++);
 }
 
 void init_mouse(void) {
@@ -145,37 +152,53 @@ void handle_mouse_polling(void) {
             if (mouse_y < 0) mouse_y = 0;
             if (mouse_y > SCREEN_HEIGHT - 40) mouse_y = SCREEN_HEIGHT - 40;
             
-            gui_refresh_desktop(mouse_x, mouse_y, system_ticks);
+            gui_refresh_desktop(mouse_x, mouse_y);
         }
     }
 }
 
 extern void init_idt(void);
 
-// ANA BAŞLANGIÇ NOKTASI (GRUB'dan gelen ebx parametresi alındı)
-void kernel_main(uint32_t* mboot_ptr) {
+// MULTIBOOT YAPISINA TAM UYUMLU ANA BAŞLANGIÇ NOKTASI
+void kernel_main(struct multiboot_info* mboot) {
     init_idt();            
-    
-    // Eğer GRUB başarıyla ekran kartı adresi döndürdüyse onu kullan, 
-    // aksi halde varsayılan güvenli adrese (0xE0000000) fallback yap.
-    if (mboot_ptr != 0 && (mboot_ptr[0] & (1 << 11))) {
-        uint32_t* vbe_info = (uint32_t*)mboot_ptr[22]; 
-        if (vbe_info != 0) {
-            vbe_vram = (uint32_t*)vbe_info[4]; // GRUB'ın eşlediği fiziksel VRAM adresi
+
+    // GRUB'ın yolladığı struct yapısını güvenli doğrulamadan geçiriyoruz
+    if (mboot != 0) {
+        // Bit 11 veya Bit 2 aktifse GRUB bize lineer VBE framebuffer sağlamıştır
+        if ((mboot->flags & (1 << 11)) || (mboot->flags & (1 << 2))) {
+            
+            // Eğer VBE Mode Info alt pointer yapısı doluysa oradan adresi cımbızla çek
+            if (mboot->vbe_mode_info != 0) {
+                uint32_t* vbe_mode_table = (uint32_t*)mboot->vbe_mode_info;
+                uint32_t lfb_check = vbe_mode_table[4]; // Resmi VRAM başlangıç offseti
+                uint16_t pitch_check = ((uint16_t*)vbe_mode_table)[8]; // Gerçek Pitch
+                
+                if (lfb_check != 0) {
+                    vbe_vram = (uint32_t*)lfb_check;
+                    vbe_pitch = pitch_check;
+                }
+            }
+            // Fallback: Eğer üstteki alt tablo boşsa doğrudan Multiboot ana LFB alanını dene
+            else if (mboot->framebuffer_addr != 0) {
+                vbe_vram = (uint32_t*)mboot->framebuffer_addr;
+                vbe_pitch = mboot->framebuffer_pitch;
+            }
         }
     }
 
-    gui_refresh_desktop(mouse_x, mouse_y, system_ticks); 
+    // İlk temiz ekranı bas
+    gui_refresh_desktop(mouse_x, mouse_y); 
     init_mouse();          
 
     while (1) {
         handle_mouse_polling();
         system_ticks++;
         
-        if (system_ticks % 250 == 0) { 
-            gui_refresh_desktop(mouse_x, mouse_y, system_ticks);
+        if (system_ticks % 300 == 0) { 
+            gui_refresh_desktop(mouse_x, mouse_y);
         }
-        sky_kernel_delay(1); 
+        for (volatile int i = 0; i < 600; i++); // İşlemciyi yormayan ufak bir nefes alma gecikmesi
     }
 }
 

@@ -3,7 +3,9 @@
 
 #include <stdint.h>
 
-/* GRUB Multiboot Standart Yapısı */
+/* =============================================================================
+   1. GRUB MULTIBOOT STANDART YAPISI (Grafik Modu Verilerini Almak İçin Şart)
+   ============================================================================= */
 struct multiboot_info {
     uint32_t flags;
     uint32_t mem_lower;
@@ -34,34 +36,47 @@ struct multiboot_info {
     uint8_t  framebuffer_type;
 };
 
-/* Port G/Ç Saf Assembly Komutları */
+/* =============================================================================
+   2. SAF ASSEMBLY PORT GEÇİŞLERİ (Donanım Portlarını Koklayan Makine Kodları)
+   ============================================================================= */
+/* Dışarıdaki donanımsal bir porta (Klavye, Fare vb.) 1 byte veri yazar */
 static inline void outb(uint16_t port, uint8_t data) {
     asm volatile("outb %0, %1" : : "a"(data), "Nd"(port));
 }
 
+/* Belirtilen donanımsal porttan gelen 1 byte'lık ham veriyi okur */
 static inline uint8_t inb(uint16_t port) {
     uint8_t ret;
     asm volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
     return ret;
 }
 
-/* ÇEKİRDEK VE GRAFİK SİSTEMLERİ */
-void init_idt(void);
-void clear_text_screen(void);
-void gui_refresh_desktop(void);
-void run_exe_subsystem(void);
-void swap_buffers(void);
+/* =============================================================================
+   3. MERKEZİ ÇEKİRDEK VE GRAFİK SİSTEMLERİ PROTOTİPLERİ
+   ============================================================================= */
+void init_idt(void);              /* Donanımsal Kesme Tablosunu (IDT) ilklendirir */
+void clear_text_screen(void);     /* Eski VGA metin modu kalıntı ekranını süpürür */
+void gui_refresh_desktop(void);   /* Masaüstü arka planını arka arabelleğe çizer */
+void run_exe_subsystem(void);     /* OOBE pencerelerini sırayla ekrana basar */
+void swap_buffers(void);          /* RAM'deki gizli ekranı jilet gibi gerçek ekrana fırlatır */
 
-/* YAPAY ZEKA DESTEKLİ SÜRÜCÜ ODALARI */
+/* =============================================================================
+   4. AKILLI VE YAPAY ZEKALI SÜRÜCÜ ODALARI PROTOTİPLERİ
+   ============================================================================= */
+/* Fare Alt Sistemi Modülü (mouse.c) */
 void init_mouse(void);
 void handle_mouse_polling(void);
 int ai_mouse_analyze_stress(void);
 
+/* Klavye Alt Sistemi Modülü (keyboard.c) */
 void init_keyboard(void);
 void check_keyboard_pure(void);
 int ai_keyboard_analyze_cadence(void);
 
-/* MERKEZİ AI ORKESTRA ŞEFİ */
+/* =============================================================================
+   5. MERKEZİ YAPAY ZEKA SİNİR MERKEZİ (ai_subsystem.c)
+   ============================================================================= */
+/* Fare ve klavyeden gelen katsayıları ağırlık matrisinde birleştirip karar verir */
 int ai_core_predict_scheduler(int mouse_stress, int kb_cadence, int loop_count);
 
 #endif /* WIND_SUBSYSTEM_H */

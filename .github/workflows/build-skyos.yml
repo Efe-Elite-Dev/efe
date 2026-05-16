@@ -10,18 +10,17 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # GitHub'a otomatik Release oluşturup dosya yükleyebilmesi için tam yetki veriyoruz
+      contents: write
     steps:
     - uses: actions/checkout@v4
 
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y nasm xorriso grub-pc-bin grub-common mtools gcc multilib-ext
+        sudo apt-get install -y nasm xorriso grub-pc-bin grub-common mtools gcc gcc-multilib
 
     - name: Build ISO via Script
       run: |
-        # Scriptin çalıştırılabilir olduğundan emin ol ve tetikle
         chmod +x build.sh
         bash build.sh
 
@@ -44,7 +43,7 @@ jobs:
           **Yenilikler:**
           - Her sürücü odasına (`kernel`, `mouse`, `keyboard`) bağımsız AI analiz motorları gömüldü.
           - `linker.ld` zırhı sayesinde GRUB'ın yaşadığı `no multiboot header found` hatası kökten çözüldü.
-          - Workflow, eski `make` bağımlılığından kurtarılarak saf `build.sh` sistemine geçirildi.
+          - Workflow bağımlılıkları `gcc-multilib` ile güncellenerek 32-bit derleme hatası giderildi.
         draft: false
         prerelease: false
         files: windos.iso

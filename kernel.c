@@ -10,6 +10,10 @@
 #define KEYBOARD_DATA_PORT 0x60
 #define KEYBOARD_STATUS_PORT 0x64
 
+/* DIŞ MODÜL KÖPRÜLERİ: Diğer odalardan (mouse.c vb.) gelen donanım lojikleri */
+extern void handle_mouse_polling(void); 
+
+/* Global Ekran Tamponu Tanımlamaları */
 uint32_t* vbe_vram = 0; 
 uint32_t  vbe_pitch = 0;
 
@@ -30,7 +34,7 @@ char scancode_to_ascii(unsigned char scancode) {
         case 0x1F: return 'S'; case 0x14: return 'T'; case 0x16: return 'U';
         case 0x2F: return 'V'; case 0x11: return 'W'; case 0x2D: return 'X';
         case 0x15: return 'Y'; case 0x2C: return 'Z';
-        case 0x39: return ' ';  /* Space */
+        case 0x39: return ' ';  /* Boşluk (Space) */
         case 0x1C: return '\n'; /* Enter */
         default: return 0;
     }
@@ -40,17 +44,15 @@ char scancode_to_ascii(unsigned char scancode) {
 void check_keyboard_pure(void) {
     static unsigned char last_scancode = 0;
     
-    /* Klavyenin donanım tamponunda yeni veri var mı kontrolü (Bit 0) */
+    /* inb fonksiyonu wind_subsystem.h içinden çakışmasız olarak çekiliyor */
     if (inb(KEYBOARD_STATUS_PORT) & 1) {
         unsigned char scancode = inb(KEYBOARD_DATA_PORT);
         
-        /* Sadece tuşa basıldığında tetiklen (0x80'den küçükse basılmıştır, büyükse bırakılmıştır) */
+        /* Sadece tuşa basıldığında tetiklen (Elini çekince pas geç) */
         if (scancode != last_scancode && scancode < 0x80) {
             char ascii = scancode_to_ascii(scancode);
             if (ascii != 0) {
-                /* TODO: Grafik arayüzündeki yazı giriş alanlarına (OOBE input field) besleme lojiği */
-                /* Metin modu fonksiyonları (print_char) grafik modunda çalışmadığı için 
-                   ileride buraya font çizim motoru entegre edilecektir. */
+                /* Grafik OOBE modüllerine font/yazı beslemesi buraya bağlanacak */
             }
         }
         last_scancode = scancode;
@@ -69,33 +71,33 @@ void kernel_main(struct multiboot_info* mboot) {
         vbe_pitch = 800 * 4;
     }
 
-    /* Arka plandaki eski VGA metin bellek kalıntılarını temizle */
+    /* Arka plandaki eski VGA metin bellek kalıntılarını temizle (screen.c) */
     clear_text_screen();
     
-    /* Donanım Katmanlarını Sırayla Ayağa Kaldır */
+    /* Sürücü Odalarını ve Donanım Katmanlarını Sırayla Ayağa Kaldır */
     init_idt();
     init_keyboard();
     init_mouse();
     
-    /* Grafik Masaüstü Temelini Çiz */
+    /* Grafik Masaüstü Temelini İlk Kez Çiz (gui.c) */
     gui_refresh_desktop();
 
     uint32_t refresh_counter = 0;
     int current_wait_cycles = 20;
 
-    /* ANA ÇEKİRDEK ORKESTRA DÖNGÜSÜ */
+    /* ANA ÇEKİRDEK ORKESTRA DÖNGÜSÜ: İşlemci durmaksızın sürücüleri tarar */
     while (1) {
-        handle_mouse_polling(); /* Fare kodunu dürt */
+        handle_mouse_polling(); /* mouse.c dosyasındaki fare odasını dürt */
         check_keyboard_pure();  /* Klavyeden gelen ham verileri dinle */
         
         refresh_counter++;
         if (refresh_counter >= 15) { 
             gui_refresh_desktop();  
-            run_exe_subsystem(); /* Grafik OOBE Kurulum Pencerelerini ekrana bas */
+            run_exe_subsystem(); /* exe_subsystem.c içindeki pencereleri ekrana bas */
             refresh_counter = 0;
         }
         
-        /* Yapay zeka zamanlayıcısı ile donanım yükünü tahmin et ve döngüyü esnet */
+        /* Yapay zeka zamanlayıcısı ile donanım yükünü tahmin et (ai_subsystem.c) */
         int system_stress = ai_predict_hardware_load(7, refresh_counter);
         current_wait_cycles = (system_stress == 1) ? 45 : 10;
 

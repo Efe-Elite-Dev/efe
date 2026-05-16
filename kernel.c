@@ -2,7 +2,6 @@
 #include "gui.h"
 #include <stdint.h>
 
-// Linker'ın görebilmesi için global durum değişkenini tanımlıyoruz
 int active_window = 0; 
 uint32_t system_ticks = 0;
 
@@ -27,7 +26,6 @@ void sky_kernel_delay(int count) {
 
 void handle_desktop_click(void) {
     if (active_window != 0) {
-        // Kapatma butonu hitbox kontrolü
         if (mouse_x >= 722 && mouse_x <= 754 && mouse_y >= 188 && mouse_y <= 212) {
             active_window = 0; 
             gui_refresh_desktop(mouse_x, mouse_y, system_ticks);
@@ -99,7 +97,6 @@ void handle_mouse_polling(void) {
     }
 }
 
-// LINKER'IN GÖREBİLMESİ İÇİN KERNEL_MAIN FONKSİYONU GLOBAL OLARAK BAŞLAMALIDIR
 void kernel_main(void) {
     gui_refresh_desktop(mouse_x, mouse_y, system_ticks); 
     init_mouse();          

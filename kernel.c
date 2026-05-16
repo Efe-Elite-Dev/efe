@@ -12,7 +12,6 @@
 #define COLOR_TEXT_MAIN    0x111625  // Modern koyu lacivert/siyah metin
 #define COLOR_TEXT_SUB     0x5C6479  // Açıklama metinleri için soft gri
 #define COLOR_ACCENT_BLUE  0x005A9E  // Windows/SKY OS OOBE Gece Mavisi (Buton ve Seçili Alan)
-#define COLOR_ACCENT_HOVER 0x0078D4  // Açık mavi
 #define COLOR_TEXT_WHITE   0xFFFFFF  // Beyaz harfler
 
 // Multiboot Yapısı
@@ -31,9 +30,22 @@ struct multiboot_info {
 uint32_t* vbe_vram = (uint32_t*)0xE0000000; 
 uint32_t  vbe_pitch = SCREEN_WIDTH * 4; 
 
-// === Temel Grafik Çizim Fonksiyonları ===
+// === boot.o Linker Hatasını Çözen Kritik Fonksiyon ===
+// boot.asm içindeki 'call keyboard_handler_c' satırı doğrudan burayı çağırır.
+void keyboard_handler_c(void) {
+    // Şimdilik polling/kesme çakışmasını önlemek için klavye portunu (0x60) boşa çıkarıyoruz
+    volatile uint8_t status;
+    __asm__ __volatile__("inb $0x64, %0" : "=a"(status));
+    if (status & 0x01) {
+        volatile uint8_t scancode;
+        __asm__ __volatile__("inb $0x60, %0" : "=a"(scancode));
+        (void)scancode; // Derleyici uyarısı vermemesi için
+    }
+}
 
-// Windows 11 Tarzı Soft Arka Plan Gradyanı
+// === Grafik Çizim Motoru ===
+
+// Soft Arka Plan Gradyanı
 void draw_background_gradient(void) {
     uint32_t pixels_per_pitch = vbe_pitch / 4;
     for (int y = 0; y < SCREEN_HEIGHT; y++) {
@@ -45,7 +57,6 @@ void draw_background_gradient(void) {
         uint8_t g2 = (COLOR_BG_BOTTOM >> 8) & 0xFF;
         uint8_t b2 = COLOR_BG_BOTTOM & 0xFF;
 
-        // Lineer renk geçiş hesabı
         uint8_t r = r1 + ((r2 - r1) * y / SCREEN_HEIGHT);
         uint8_t g = g1 + ((g2 - g1) * y / SCREEN_HEIGHT);
         uint8_t b = b1 + ((b2 - b1) * y / SCREEN_HEIGHT);
@@ -69,7 +80,7 @@ void draw_rect(int start_x, int start_y, int width, int height, uint32_t color) 
     }
 }
 
-// Daire Çizici (Sol taraftaki Dünya/İkon alanı için)
+// Daire Çizici (Sol taraftaki Dünya/İkon alanı simülasyonu)
 void draw_circle(int xc, int yc, int r, uint32_t color) {
     uint32_t pixels_per_pitch = vbe_pitch / 4;
     for (int y = yc - r; y <= yc + r; y++) {
@@ -83,7 +94,7 @@ void draw_circle(int xc, int yc, int r, uint32_t color) {
     }
 }
 
-// === Özel OOBE Font Matrisi ===
+// === Özel OOBE Font Matrisi (Türkçe karakter destek simülasyonlu) ===
 unsigned char font_bitmap[128][16] = {
     ['S'] = {0x3C, 0x42, 0x40, 0x3C, 0x02, 0x02, 0x42, 0x42, 0x3C},
     ['K'] = {0x42, 0x44, 0x48, 0x70, 0x50, 0x48, 0x44, 0x42, 0x42},
@@ -106,15 +117,17 @@ unsigned char font_bitmap[128][16] = {
     ['v'] = {0x00, 0x00, 0x42, 0x42, 0x42, 0x24, 0x18, 0x00, 0x00},
     ['E'] = {0x7E, 0x40, 0x40, 0x76, 0x40, 0x40, 0x7E, 0x00, 0x00},
     ['T'] = {0x7E, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x00, 0x00},
-    ['u'] = {0x00, 0x00, 0x42, 0x42, 0x42, 0x46, 0x3A, 0x00, 0x00},
-    ['r'] = {0x00, 0x00, 0x2E, 0x30, 0x20, 0x20, 0x20, 0x00, 0x00},
-    ['k'] = {0x20, 0x20, 0x24, 0x28, 0x30, 0x28, 0x24, 0x00, 0x00},
-    ['i'] = {0x08, 0x00, 0x08, 0x08, 0x08, 0x08, 0x0C, 0x00, 0x00},
-    ['y'] = {0x00, 0x00, 0x42, 0x42, 0x42, 0x3E, 0x02, 0x3C, 0x00},
-    ['e'] = {0x00, 0x00, 0x3C, 0x42, 0x7E, 0x40, 0x3C, 0x00, 0x00},
+    ['C'] = {0x3C, 0x42, 0x40, 0x40, 0x40, 0x40, 0x3C, 0x00, 0x00},
+    ['M'] = {0x42, 0x66, 0x5A, 0x42, 0x42, 0x42, 0x42, 0x00, 0x00},
+    ['n'] = {0x00, 0x00, 0x5C, 0x62, 0x42, 0x42, 0x42, 0x00, 0x00},
+    ['z'] = {0x00, 0x00, 0x7E, 0x04, 0x08, 0x10, 0x7E, 0x00, 0x00},
     ['Q'] = {0x3C, 0x42, 0x42, 0x42, 0x42, 0x4A, 0x3C, 0x0A, 0x00},
+    ['F'] = {0x7E, 0x40, 0x40, 0x76, 0x40, 0x40, 0x40, 0x00, 0x00},
+    ['L'] = {0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x7E, 0x00, 0x00},
     ['?'] = {0x3C, 0x42, 0x02, 0x0C, 0x10, 0x10, 0x00, 0x10, 0x00},
     ['/'] = {0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x00, 0x00},
+    ['('] = {0x0C, 0x18, 0x30, 0x30, 0x30, 0x18, 0x0C, 0x00, 0x00},
+    [')'] = {0x30, 0x18, 0x0C, 0x0C, 0x0C, 0x18, 0x30, 0x00, 0x00},
     ['-'] = {0x00, 0x00, 0x00, 0x7E, 0x00, 0x00, 0x00, 0x00, 0x00},
     [' '] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 };
@@ -142,12 +155,12 @@ void put_string(const char* s, int x, int y, uint32_t color) {
     }
 }
 
-// === SKY OS OOBE MOTORU ===
+// === SKY OS OOBE GÖRSEL YERLEŞİM MOTORU ===
 void draw_sky_os_oobe_ui(void) {
-    // 1. Arka Planı Windows 11 Gradyanı ile Kapla
+    // 1. Arka Planı Gradyanla Doldur
     draw_background_gradient();
 
-    // 2. Ana Akrilik Panel Tasarımı (Ortadaki Büyük Kart)
+    // 2. Ortadaki Büyük Beyaz Kart (Kurulum Alanı)
     int card_w = 700;
     int card_h = 480;
     int card_x = (SCREEN_WIDTH - card_w) / 2;
@@ -155,76 +168,76 @@ void draw_sky_os_oobe_ui(void) {
     draw_rect(card_x, card_y, card_w, card_h, COLOR_CARD_BG);
 
     // ====================================================================
-    // 🌍 SOL ALAN: KÜRESEL GRAFİK VE ADIM LOGOSU (Görsel 1 ve 2'deki gibi)
+    // 🌍 SOL ALAN: KÜRESEL AKRİLİK GRAFİK (Yüklediğin Görsellerdeki Gibi)
     // ====================================================================
     int left_center_x = card_x + 160;
     int left_center_y = card_y + 240;
     
-    // Katmanlı Dünya/İkon Efekti (Mavi ve mor tonlarında iç içe halkalar)
-    draw_circle(left_center_x, left_center_y, 75, 0x3B82F6); // Ana Dış Küre (Açık Mavi)
-    draw_circle(left_center_x - 10, left_center_y + 10, 55, 0x1D4ED8); // İç Gölge (Koyu Mavi)
-    draw_circle(left_center_x + 20, left_center_y - 20, 35, 0x6366F1); // Parlama (İndigo)
+    // Üç katmanlı yuvarlak modern grafik simülasyonu
+    draw_circle(left_center_x, left_center_y, 75, 0x3B82F6);           // Dış Mavi Küre
+    draw_circle(left_center_x - 12, left_center_y + 12, 55, 0x1D4ED8); // İç Koyu Bölge
+    draw_circle(left_center_x + 20, left_center_y - 20, 35, 0x6366F1); // İndigo Parlama
 
-    // Sol Üste İnce Bir SKY OS Yazısı Ekleyelim
-    put_string("SKY OS OOBE Core", card_x + 30, card_y + 30, COLOR_TEXT_SUB);
+    // Sol Üst Köşe Bilgi Metni
+    put_string("SKY OS OOBE Setup", card_x + 30, card_y + 30, COLOR_TEXT_SUB);
 
     // ====================================================================
-    // 📋 SAĞ ALAN: DİKEY LİSTE VE METİNLER (Görsel 1 ve Görsel 2 Karışımı)
+    // 📋 SAĞ ALAN: BAŞLIKLAR VE DİKEY LİSTE SEÇENEKLERİ
     // ====================================================================
     int right_content_x = card_x + 340;
     int right_content_y = card_y + 60;
 
-    // Ana Soru Başlığı
+    // Ana Soru Başlığı (Görsel 1)
     put_string("Bu dogru ulke/bolge mi?", right_content_x, right_content_y, COLOR_TEXT_MAIN);
     
-    // Alt Başlık Açıklaması
-    put_string("SKY OS kurulum dili ve klavye duzeni", right_content_x, right_content_y + 22, COLOR_TEXT_SUB);
-    put_string("otomatik olarak ayarlanacaktir.", right_content_x, right_content_y + 38, COLOR_TEXT_SUB);
+    // Alt Bilgi Satırları
+    put_string("SKY OS dil ve bolge ayarlari otomatik", right_content_x, right_content_y + 22, COLOR_TEXT_SUB);
+    put_string("olarak sisteme entegre edilecektir.", right_content_x, right_content_y + 38, COLOR_TEXT_SUB);
 
-    // Dikey Menü Elemanları (Görsellerdeki gibi liste)
+    // Dikey Menü Listesi Düzeni
     int item_x = right_content_x;
-    int item_y = right_content_y + 80;
+    int item_y = right_content_y + 85;
     int item_w = 320;
     int item_h = 36;
 
-    // Liste Elemanı 1: Standart Seçenek
+    // Eleman 1
     put_string("Almanya", item_x + 12, item_y + 10, COLOR_TEXT_SUB);
     
-    // Liste Elemanı 2: Standart Seçenek
+    // Eleman 2
     item_y += item_h + 6;
     put_string("Amerika Birlesik Devletleri", item_x + 12, item_y + 10, COLOR_TEXT_SUB);
 
-    // Liste Elemanı 3: AKTİF SEÇİLİ ALAN (Görseldeki gibi kalın parlayan mavi şerit!)
+    // Eleman 3: AKTİF SEÇİLİ BÖLGE (Görseldeki parlayan mavi şerit!)
     item_y += item_h + 6;
     draw_rect(item_x, item_y, item_w, item_h, COLOR_ACCENT_BLUE);
     put_string("Turkiye (SKY OS Core)", item_x + 12, item_y + 12, COLOR_TEXT_WHITE);
 
-    // Liste Elemanı 4: Standart Seçenek
+    // Eleman 4
     item_y += item_h + 6;
     put_string("Turkmenistan", item_x + 12, item_y + 10, COLOR_TEXT_SUB);
 
-    // Liste Elemanı 5: Klavye Düzeni Bilgisi
+    // Eleman 5
     item_y += item_h + 6;
-    put_string("Turkce Q / F Layout", item_x + 12, item_y + 10, COLOR_TEXT_SUB);
+    put_string("Turkce Q / F Klavye Modu", item_x + 12, item_y + 10, COLOR_TEXT_SUB);
 
     // ====================================================================
-    // 🔘 SAĞ ALT ALAN: MODERN OOBE "EVET" BUTONU
+    // 🔘 SAĞ ALT ALAN: MODERN BEYAZ/MAVİ "EVET" BUTONU
     // ====================================================================
     int btn_w = 110;
     int btn_h = 32;
     int btn_x = card_x + card_w - btn_w - 30;
     int btn_y = card_y + card_h - btn_h - 30;
 
-    // Evet Butonunun Dikdörtgen Kutusu
+    // Buton Gövdesi
     draw_rect(btn_x, btn_y, btn_w, btn_h, COLOR_ACCENT_BLUE);
     
-    // Butonun Üzerindeki "Evet" Metnini Tam Ortala
+    // Buton Metni ("Evet")
     put_string("Evet", btn_x + 38, btn_y + 8, COLOR_TEXT_WHITE);
 }
 
 // === ANA ÇEKİRDEK GİRİŞİ ===
 void kernel_main(struct multiboot_info* mboot) {
-    // VBE Grafik Tampon Bağlantısı
+    // VBE Linear Framebuffer Adres Bağlantısı
     if (mboot != 0) {
         if ((mboot->flags & (1 << 11)) || (mboot->flags & (1 << 2))) {
             if (mboot->framebuffer_addr != 0) {
@@ -234,10 +247,10 @@ void kernel_main(struct multiboot_info* mboot) {
         }
     }
 
-    // Arayüzü Çiz
+    // Arayüzü Ekrana Çiz
     draw_sky_os_oobe_ui();
 
-    // İşlemciyi Güvenli Döngüye Al
+    // İşlemciyi HLT durumunda kilitle (Sonsuz Döngü)
     while (1) {
         __asm__ __volatile__("hlt");
     }

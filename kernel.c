@@ -1,17 +1,8 @@
 #include "sky_subsystem.h"
 #include "mouse.h"
 
-// gui.c veya screen.c içindeki arayüzü tetiklemek için extern fonksiyon
-extern void render_interface(void);
-
-void keyboard_handler_c(void) {
-    if (inb(0x64) & 0x01) {
-        volatile uint8_t scancode = inb(0x60);
-        if (scancode == 0x1C) { // Enter tuşu
-            setup_completed = 1;
-        }
-    }
-}
+// gui.c içindeki masaüstü tazeleme ve başlatma fonksiyonu
+extern void gui_refresh_desktop(void);
 
 void kernel_main(struct multiboot_info* mboot) {
     if (mboot != 0 && mboot->framebuffer_addr != 0) {
@@ -19,22 +10,23 @@ void kernel_main(struct multiboot_info* mboot) {
         vbe_pitch = mboot->framebuffer_pitch;
     }
 
+    // Fareyi başlat
     init_mouse();
     
-    // İlk arayüz çizimi (gui.c içindeki render fonksiyonunu çağırır)
-    render_interface();
+    // İlk masaüstü grafik arayüzünü çiz
+    gui_refresh_desktop();
 
     uint32_t refresh_counter = 0;
     while (1) {
         handle_mouse_polling();
-        keyboard_handler_c();
         
         refresh_counter++;
         if (refresh_counter >= 150) {
-            render_interface();
+            gui_refresh_desktop();
             refresh_counter = 0;
         }
         
+        // İşlemciyi çok yormamak için minik gecikme (bare-metal delay)
         for (volatile int i = 0; i < 50; i++);
     }
 }

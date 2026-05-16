@@ -1,19 +1,26 @@
 #include "wind_subsystem.h"
 
-/* AI Global Durum Değişkenleri */
+/* Global AI Tahmin Değişkenleri */
 int central_ai_prediction_level = 0;
+int ai_inference_counter = 0;
 
-/* AI CORE: Diğer odaların yapay zeka analizlerini birleştirip merkezi tahminde bulunur */
+/* CENTRAL AI MOTORU: Alt odalardan gelen donanımsal stres seviyelerini birleştirir */
 int ai_core_predict_scheduler(int mouse_stress, int kb_cadence, int loop_count) {
-    /* Matris tabanlı donanım yükü ve kullanıcı stres seviyesi simülasyon algoritması */
-    int decision_matrix = (mouse_stress * 3) + (kb_cadence * 5) + (loop_count % 10);
+    ai_inference_counter++;
     
-    if (decision_matrix > 50) {
-        central_ai_prediction_level = 2; /* Yüksek Performans / Turbo Mod */
-    } else if (decision_matrix > 20) {
-        central_ai_prediction_level = 1; /* Standart Mod */
+    /* Doğrusal Regresyon ve Ağırlıklı Karar Matrisi Algoritması (Donanım Seviyesi Simülasyonu) */
+    int raw_decision_score = (mouse_stress * 4) + (kb_cadence * 6) + ((loop_count % 5) * 2);
+    
+    /* Yapay zeka karar mekanizmasının eşik değerleri (Thresholds) analizi */
+    if (raw_decision_score > 45) {
+        /* Kullanıcı çok aktif veya panik halinde: Sistemi maksimum hıza çek (TURBO PERFORMANCE) */
+        central_ai_prediction_level = 2;
+    } else if (raw_decision_score > 18) {
+        /* Standart insan etkileşimi modu: Kararlı hız (BALANCED MODE) */
+        central_ai_prediction_level = 1;
     } else {
-        central_ai_prediction_level = 0; /* Güç Koruma Modu / Boşta */
+        /* Donanımda hareket yok: İşlemciyi dinlendir, frekans beklemesini esnet (ECO SAVING) */
+        central_ai_prediction_level = 0;
     }
     
     return central_ai_prediction_level;

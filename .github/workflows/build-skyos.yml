@@ -1,154 +1,24 @@
-name: "SKY OS Core: Ultimate Enterprise Build System"
+name: Build Wind OS
 
 on:
   push:
-    branches: [ "main", "master" ]
-    paths-ignore:
-      - 'README.md'
-      - '.gitignore'
+    branches: [ "main" ]
   pull_request:
-    branches: [ "main", "master" ]
-
-permissions:
-  contents: write
-  packages: write
+    branches: [ "main" ]
 
 jobs:
-  audit:
-    name: "Siber Güvenlik ve Kod Analizi"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Repoyu Klonla
-        uses: actions/checkout@v4
-
-      - name: C Derleyicisi ile Ön Kontrol (Syntax Linting)
-        run: |
-          gcc -m32 -fsyntax-only -Wall -Wextra -ffreestanding *.c 2>&1 || echo "Uyarılar incelenmeli!"
-
   build:
-    name: "Bare-Metal Çapraz Derleme Sistemi"
-    needs: audit
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Repoyu Klonla
-        uses: actions/checkout@v4
-
-      - name: Gelişmiş Endüstriyel Derleme Araçlarını Kur (XORRISO & GRUB2)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential \
-            gcc-multilib \
-            nasm \
-            xorriso \
-            grub-common \
-            grub-pc-bin \
-            mtools \
-            dosfstools
-
-      - name: Saf Komutlarla Derleme ve Bağlama (Link) İşlemi
-        run: |
-          echo "=== SKY OS DERLEME SÜRECİ BAŞLADI ==="
-          
-          # 1. Assembly dosyalarını derle
-          nasm -f elf32 boot.asm -o boot.o
-          
-          # 2. Tüm C alt sistemlerini tek tek derle
-          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. sky_subsystem.c -o sky_subsystem.o
-          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. kernel.c -o kernel.o
-          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. mouse.c -o mouse.o
-          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. screen.c -o screen.o
-          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. gui.c -o gui.o
-          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. ai_subsystem.c -o ai_subsystem.o
-          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. deb_subsystem.c -o deb_subsystem.o
-          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. exe_subsystem.c -o exe_subsystem.o
-          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. keyboard.c -o keyboard.o
-          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. idt.c -o idt.o
-          
-          # 3. Bağlama işlemi (BURADA TÜM DEĞİŞKENLER VE AI MOTORU BAĞLANIYOR)
-          ld -m elf_i386 -nostdlib -T linker.ld \
-            boot.o \
-            sky_subsystem.o \
-            kernel.o \
-            mouse.o \
-            screen.o \
-            gui.o \
-            ai_subsystem.o \
-            deb_subsystem.o \
-            exe_subsystem.o \
-            keyboard.o \
-            idt.o \
-            -o kernel.bin
-          
-          echo "=== KERNEL.BIN BASARIYLA URETILDI ==="
-
-      - name: Otomatik ISO Kalıbı Oluşturma (GRUB 2 Modern Paketleme)
-        run: |
-          echo "=== ISO Yapilandirmasi Baslatiliyor ==="
-          
-          # Klasör yapısını kur
-          mkdir -p iso_root/boot/grub
-          
-          # KERNELİ İÇİNE AT
-          cp kernel.bin iso_root/boot/
-          
-          # grub.cfg dosyasını yaz
-          echo 'set timeout=0' > iso_root/boot/grub/grub.cfg
-          echo 'set default=0' >> iso_root/boot/grub/grub.cfg
-          echo '' >> iso_root/boot/grub/grub.cfg
-          echo 'menuentry "SKY OS Core" {' >> iso_root/boot/grub/grub.cfg
-          echo '    multiboot /boot/kernel.bin' >> iso_root/boot/grub/grub.cfg
-          echo '    boot' >> iso_root/boot/grub/grub.cfg
-          echo '}' >> iso_root/boot/grub/grub.cfg
-          
-          # xorriso ve grub-mkrescue kullanarak kusursuz bootable ISO basıyoruz
-          grub-mkrescue -o skyos.iso iso_root/
-          
-          echo "=== ISO BOYUTLARI ==="
-          echo "ISO Boyutu: $(du -sh skyos.iso)"
-
-      - name: Çıktıları Güvenli Artefakt Olarak Sakla
-        uses: actions/upload-artifact@v4
-        with:
-          name: skyos-production-build
-          path: |
-            *.bin
-            *.iso
-          retention-days: 7
-
-  release:
-    name: "Otomatik GitHub Release Dağıtımı"
-    needs: build
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     steps:
-      - name: Repoyu Klonla
-        uses: actions/checkout@v4
-
-      - name: Üretilen ISO Paketini İndir
-        uses: actions/download-artifact@v4
-        with:
-          name: skyos-production-build
-
-      - name: Benzersiz Sürüm Kimliği Oluştur (Build ID)
-        id: versioning
-        run: |
-          echo "VERSION=v2.1.${{ github.run_number }}" >> $GITHUB_ENV
-
-      - name: Otomatik GitHub Sürümü (Release) Yayınla
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.VERSION }}
-          name: "SKY OS Core Integration ${{ env.VERSION }}"
-          body: |
-            ## 🚀 SKY OS Core - Otomatik Derleme Raporu
-            Bu sürüm **XORRISO, GRUB 2 BARINDIRAN GÜÇLENDİRİLMİŞ YAPAY ZEKA VE SELF-HEALING** motoruyla derlenmiştir.
-            
-            - **Sürüm:** ${{ env.VERSION }}
-            - **Mimarisi:** x86 Korumalı Mod (32-Bit HAL)
-          draft: false
-          prerelease: false
-          files: |
-            skyos.iso
-            kernel.bin
+    - uses: actions/checkout@v3
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y nasm xorriso grub-pc-bin grub-common mtools
+    - name: Build ISO
+      run: make all
+    - name: Upload ISO
+      uses: actions/upload-artifact@v3
+      with:
+        name: windos-iso
+        path: windos.iso

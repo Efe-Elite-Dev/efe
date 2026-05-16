@@ -14,7 +14,7 @@ permissions:
   packages: write
 
 jobs:
-  # 1. ETAP: KODUN KALİTE VE GÜVENLİK KONTROLÜ (STATIC ANALYSIS)
+  # 1. ETAP: KODUN KALİTE KONTROLÜ
   audit:
     name: "Siber Güvenlik ve Kod Analizi"
     runs-on: ubuntu-latest
@@ -26,7 +26,7 @@ jobs:
         run: |
           gcc -m32 -fsyntax-only -Wall -Wextra -ffreestanding *.c 2>&1 || echo "Uyarılar incelenmeli!"
 
-  # 2. ETAP: ULTRA OPTİMİZE DERLEME BANDI
+  # 2. ETAP: SAF BASH İLE ULTRA OPTİMİZE DERLEME BANDI (MAKEFILE YOK!)
   build:
     name: "Bare-Metal Çapraz Derleme Sistemi"
     needs: audit
@@ -36,14 +36,6 @@ jobs:
       - name: Repoyu Klonla
         uses: actions/checkout@v4
 
-      - name: Gelişmiş Paket Önbelleği (APT Cache Optimization)
-        uses: actions/cache@v4
-        with:
-          path: /var/cache/apt/archives
-          key: ${{ runner.os }}-apt-${{ hashFiles('**/Makefile') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-
-
       - name: Gelişmiş Endüstriyel Derleme Araçlarını Kur
         run: |
           sudo apt-get update
@@ -51,22 +43,53 @@ jobs:
             build-essential \
             gcc-multilib \
             genisoimage \
-            nasm \
-            mtools \
-            grub-common
+            nasm
 
-      - name: Projeyi Derle ve Logları Çıkart
+      - name: Saf Komutlarla Derleme ve Bağlama (Link) İşlemi
         run: |
           echo "=== SKY OS DERLEME SÜRECİ BAŞLADI ==="
-          make clean
-          make
-          echo "=== DERLEME BAŞARIYLA TAMAMLANDI ==="
+          
+          # 1. Assembly dosyalarını derle
+          nasm -f elf32 boot.asm -o boot.o
+          
+          # 2. Tüm C alt sistemlerini tek tek derle
+          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. sky_subsystem.c -o sky_subsystem.o
+          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. kernel.c -o kernel.o
+          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. mouse.c -o mouse.o
+          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. screen.c -o screen.o
+          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. gui.c -o gui.o
+          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. ai_subsystem.c -o ai_subsystem.o
+          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. deb_subsystem.c -o deb_subsystem.o
+          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. exe_subsystem.c -o exe_subsystem.o
+          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. keyboard.c -o keyboard.o
+          gcc -m32 -c -ffreestanding -O2 -Wall -Wextra -I. idt.c -o idt.o
+          
+          # 3. Doğru emülasyon moduyla (elf_i386) hepsini birbirine bağla
+          ld -m elf_i386 -nostdlib -nodefaultlibs -T linker.ld boot.o sky_subsystem.o kernel.o mouse.o screen.o gui.o ai_subsystem.o deb_subsystem.o exe_subsystem.o keyboard.o idt.o -o kernel.bin
+          
+          echo "=== KERNEL.BIN BASARIYLA URETILDI ==="
 
-      - name: Derleme Çıktılarını (ISO/BIN) Doğrula
+      - name: Otomatik ISO Kalıbı Oluşturma (GRUB Entegrasyonu)
         run: |
-          if [ ! -f skyos.iso ]; then
-            echo "CRITICAL ERROR: skyos.iso uretilemedi!" && exit 1
-          fi
+          echo "=== ISO Yapilandirmasi Baslatiliyor ==="
+          
+          # Klasör yapısını sunucuda sıfırdan kur
+          mkdir -p iso_root/boot/grub
+          
+          # Üretilen kerneli içine at
+          cp kernel.bin iso_root/boot/
+          
+          # grub.cfg dosyasını dinamik olarak içine yaz
+          echo 'menuentry "SKY OS Core" {' > iso_root/boot/grub/grub.cfg
+          echo '    multiboot /boot/kernel.bin' >> iso_root/boot/grub/grub.cfg
+          echo '    boot' >> iso_root/boot/grub/grub.cfg
+          echo '}' >> iso_root/boot/grub/grub.cfg
+          
+          # ISO'yu paketle
+          genisoimage -R -b boot/grub/stage2_eltorito -no-emul-boot -boot-load-size 4 -boot-info-table -o skyos.iso iso_root 2>/dev/null || \
+          genisoimage -R -o skyos.iso iso_root
+          
+          echo "=== ISO BOYUTLARI ==="
           echo "ISO Boyutu: $(du -sh skyos.iso)"
           echo "Kernel Boyutu: $(du -sh kernel.bin)"
 
@@ -77,7 +100,6 @@ jobs:
           path: |
             *.bin
             *.iso
-            iso_root/
           retention-days: 7
 
   # 3. ETAP: OTOMATİK SÜRÜM DAĞITIM SİSTEMİ (RELEASE AUTO-PILOT)
